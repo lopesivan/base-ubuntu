@@ -160,7 +160,11 @@ rm:
 su-exec:
 	make -C system/su-exec
 
-build: su-exec
+cont-init.d:
+	chmod +x system/root/etc/cont-init.d/*
+	chmod +x system/root/usr/bin/with-contenv
+
+build: su-exec cont-init.d
 	$(DOCKER) build $(BUILD_OPTS) .
 
 create-dirs:
