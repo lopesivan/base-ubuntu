@@ -1,4 +1,4 @@
-include ../.version
+include .version
 
 NAME              = node-api
 USER              = $(shell id -u -n)
@@ -28,10 +28,10 @@ EXT_RELEASE_CLEAN = $(MINOR)
 LS_TAG_NUMBER     = $(PATCH)
 
 IMAGE             = ${MACHINENAME}
-LATEST            = latest
-META_TAG          = ${LATEST}
-VERSION_TAG       = ${LATEST}
-TAG               = ${LATEST}
+META_TAG          = amd64-${VERSION}
+VERSION_TAG       = ${META_TAG}
+TAG               = ${META_TAG}
+
 all: build
 
 disable-x:
