@@ -1,0 +1,57 @@
+#!/usr/bin/with-contenv bash
+# cont-init.d/10-adduser
+set -euo pipefail
+
+cat <<'BANNER'
+-------------------------------------
+            ██╗  ██╗██████╗
+            ██║  ██║╚════██╗
+            ███████║ █████╔╝
+            ╚════██║██╔═══╝
+                 ██║███████╗
+                 ╚═╝╚══════╝
+                       Algoritmos
+
+Author: Ivan Lopes
+  Mail: lopesivan.ufrj@gmail.com
+  Site: ivanlopes.eng.br
+-------------------------------------
+BANNER
+
+log() { echo "[adduser] $*"; }
+
+USER="${USER:-}"
+GROUP="${GROUP:-}"
+UID="${UID:-}"
+GID="${GID:-}"
+
+log "USER=${USER} GROUP=${GROUP} UID=${UID} GID=${GID}"
+
+if [[ -z "$GID" || -z "$UID" || -z "$USER" || -z "$GROUP" ]]; then
+  log "Sem variáveis de usuário — mantendo root"
+  exit 0
+fi
+
+# --- Grupo ------------------------------------------------------------------
+if getent group "$GID" >/dev/null 2>&1; then
+  log "GID $GID já existe"
+elif getent group "$GROUP" >/dev/null 2>&1; then
+  log "Grupo $GROUP já existe"
+else
+  log "Criando grupo $GROUP (GID=$GID)"
+  groupadd -g "$GID" "$GROUP"
+fi
+
+# --- Usuário ----------------------------------------------------------------
+if getent passwd "$UID" >/dev/null 2>&1; then
+  log "UID $UID já existe"
+elif getent passwd "$USER" >/dev/null 2>&1; then
+  log "Usuário $USER já existe"
+else
+  log "Criando usuário $USER (UID=$UID GID=$GID)"
+  useradd -u "$UID" -g "$GID" -M -s /bin/bash "$USER"
+fi
+
+export HOME="/home/$USER"
+mkdir -p "$HOME"
+chown "$USER:$GROUP" "$HOME"
