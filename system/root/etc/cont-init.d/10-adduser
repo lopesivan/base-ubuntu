@@ -20,38 +20,40 @@ BANNER
 
 log() { echo "[adduser] $*"; }
 
-USER="${USER:-}"
-GROUP="${GROUP:-}"
-UID="${UID:-}"
-GID="${GID:-}"
+# PUID/PGID são as variáveis seguras — UID/GID são readonly no bash
+_USER="${USER:-}"
+_GROUP="${GROUP:-}"
+_UID="${PUID:-}"
+_GID="${PGID:-}"
 
-log "USER=${USER} GROUP=${GROUP} UID=${UID} GID=${GID}"
+log "USER=${_USER} GROUP=${_GROUP} UID=${_UID} GID=${_GID}"
 
-if [[ -z "$GID" || -z "$UID" || -z "$USER" || -z "$GROUP" ]]; then
+if [[ -z "$_GID" || -z "$_UID" || -z "$_USER" || -z "$_GROUP" ]]; then
   log "Sem variáveis de usuário — mantendo root"
   exit 0
 fi
 
 # --- Grupo ------------------------------------------------------------------
-if getent group "$GID" >/dev/null 2>&1; then
-  log "GID $GID já existe"
-elif getent group "$GROUP" >/dev/null 2>&1; then
-  log "Grupo $GROUP já existe"
+if getent group "$_GID" >/dev/null 2>&1; then
+  log "GID $_GID já existe"
+elif getent group "$_GROUP" >/dev/null 2>&1; then
+  log "Grupo $_GROUP já existe"
 else
-  log "Criando grupo $GROUP (GID=$GID)"
-  groupadd -g "$GID" "$GROUP"
+  log "Criando grupo $_GROUP (GID=$_GID)"
+  groupadd -g "$_GID" "$_GROUP"
 fi
 
 # --- Usuário ----------------------------------------------------------------
-if getent passwd "$UID" >/dev/null 2>&1; then
-  log "UID $UID já existe"
-elif getent passwd "$USER" >/dev/null 2>&1; then
-  log "Usuário $USER já existe"
+if getent passwd "$_UID" >/dev/null 2>&1; then
+  log "UID $_UID já existe"
+elif getent passwd "$_USER" >/dev/null 2>&1; then
+  log "Usuário $_USER já existe"
 else
-  log "Criando usuário $USER (UID=$UID GID=$GID)"
-  useradd -u "$UID" -g "$GID" -M -s /bin/bash "$USER"
+  log "Criando usuário $_USER (UID=$_UID GID=$_GID)"
+  useradd -u "$_UID" -g "$_GID" -M -s /bin/bash "$_USER"
 fi
 
-export HOME="/home/$USER"
+export HOME="/home/$_USER"
 mkdir -p "$HOME"
-chown "$USER:$GROUP" "$HOME"
+chown "$_USER:$_GROUP" "$HOME"
+log "HOME=$HOME pronto"
