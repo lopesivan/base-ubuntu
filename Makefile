@@ -101,6 +101,9 @@ run: config
 exec:
 	$(DOCKER_COMPOSE) exec $(CONTAINER_NAME) entrypoint.sh /bin/bash -l
 
+exec-root:
+	$(DOCKER) exec -it -u root $(CONTAINER_NAME) bash
+
 ps:
 	$(DOCKER) ps -a
 
