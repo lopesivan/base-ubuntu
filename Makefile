@@ -127,7 +127,7 @@ net:
 rm-network:
 	$(DOCKER) network ls| awk '$$2 !~ "(bridge|host|none)" {print "docker network rm " $$1}' | sed '1d'
 
-rmi:
+rmi: disable-x
 	docker rmi ${MACHINENAME}:${META_TAG}
 	make -C system/su-exec clean
 
@@ -160,11 +160,25 @@ rm:
 su-exec:
 	make -C system/su-exec
 
-cont-init.d:
-	chmod +x system/root/etc/cont-init.d/*
-	chmod +x system/root/usr/bin/with-contenv
+disable-x:
+	chmod -x system/opt/sdk/bin/sdk.sh \
+	system/entrypoint.sh \
+	system/root/usr/bin/with-contenv \
+	system/root/etc/cont-init.d/90-custom-folders \
+	system/root/etc/cont-init.d/99-custom-scripts \
+	system/root/etc/cont-init.d/01-envfile \
+	system/root/etc/cont-init.d/10-adduser
 
-build: su-exec cont-init.d
+enable-x:
+	chmod +x system/opt/sdk/bin/sdk.sh \
+	system/entrypoint.sh \
+	system/root/usr/bin/with-contenv \
+	system/root/etc/cont-init.d/90-custom-folders \
+	system/root/etc/cont-init.d/99-custom-scripts \
+	system/root/etc/cont-init.d/01-envfile \
+	system/root/etc/cont-init.d/10-adduser
+
+build: su-exec enable-x
 	$(DOCKER) build $(BUILD_OPTS) .
 
 create-dirs:
