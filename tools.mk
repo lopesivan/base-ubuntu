@@ -31,7 +31,6 @@ rm-network:
 
 rmi: disable-x
 	docker rmi ${MACHINENAME}:${META_TAG}
-	make -C system/su-exec clean
 
 rm-all:
 	$(DOCKER) ps -aq -f status=exited| xargs $(DOCKER) rm
