@@ -129,6 +129,8 @@ rm-network:
 
 rmi:
 	docker rmi ${MACHINENAME}:${META_TAG}
+	make -C system/su-exec clean
+
 rm-all:
 	$(DOCKER) ps -aq -f status=exited| xargs $(DOCKER) rm
 
@@ -155,7 +157,10 @@ stop:
 rm:
 	$(DOCKER) rm $(CONTAINER_NAME)
 
-build:
+su-exec:
+	make -C system/su-exec
+
+build: su-exec
 	$(DOCKER) build $(BUILD_OPTS) .
 
 create-dirs:
