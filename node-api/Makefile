@@ -1,9 +1,36 @@
-NAME           = node-api
-CONTAINER_NAME = node-api
-IMAGE          = ivancarlos/$(NAME)
-TAG            = latest
-DOCKER         = docker
-COMPOSE        = docker-compose
+include ../.version
+
+NAME              = node-api
+USER              = $(shell id -u -n)
+GROUP             = $(shell id -g -n)
+UID               = $(shell id -u)
+GID               = $(shell id -g)
+env-file          =
+GITHUB_USER       = ivancarlos
+
+VERSION           = $(MAJOR).$(MINOR).$(PATCH)
+SERVICE           = ${NAME}
+OWNER             = ${GITHUB_USER}
+MACHINENAME       = $(OWNER)/$(NAME)
+
+DOCKER_COMPOSE    = docker-compose
+DOCKER            = docker
+CONTAINER_NAME    = $(NAME)
+EMAIL             = $(shell git config user.email)
+
+LATEST            = $(VERSION)
+GITHUB_DATE       = $(shell date "+%Y%m%d")
+
+COMMIT_SHA        = $(shell git rev-parse --verify HEAD 2>/dev/null || echo "unknown")
+SITE              = $(shell git config user.site 2>/dev/null || echo "ivanlopes.eng.br")
+
+EXT_RELEASE_CLEAN = $(MINOR)
+LS_TAG_NUMBER     = $(PATCH)
+
+LATEST            = latest
+IMAGE             = ${MACHINENAME}
+META_TAG          = ${LATEST}
+VERSION_TAG       = ${LATEST}
 
 all: build
 
