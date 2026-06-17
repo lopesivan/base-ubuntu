@@ -1,0 +1,25 @@
+#!/bin/bash
+# cont-init.d/01-envfile
+# Expande variáveis FILE__VAR apontando para arquivos de segredo (secrets)
+
+ENV_DIR="/var/run/s6/container_environment"
+
+if [[ ! -d "$ENV_DIR" ]]; then
+  exit 0
+fi
+
+for filepath in "$ENV_DIR"/FILE__*; do
+  [[ -e "$filepath" ]] || continue
+
+  varname="${filepath##*/}"
+  secretfile=$(cat "$filepath")
+
+  if [[ ! -f "$secretfile" ]]; then
+    echo "[env-init] WARN: arquivo de segredo não encontrado em ${varname}"
+    continue
+  fi
+
+  target="${filepath//FILE__/}"
+  cat "$secretfile" > "$target"
+  echo "[env-init] ${target##*/} definido a partir de ${varname}"
+done
