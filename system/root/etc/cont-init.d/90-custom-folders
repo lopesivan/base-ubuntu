@@ -1,0 +1,15 @@
+#!/usr/bin/with-contenv bash
+# cont-init.d/90-custom-folders
+set -euo pipefail
+
+log() { echo "[custom-folders] $*"; }
+
+for dir in /app /config /defaults; do
+  [[ -d "$dir" ]] || { mkdir -p "$dir"; log "criado $dir"; }
+done
+
+mkdir -p /config/custom-cont-init.d /config/custom-services.d
+chown -R 0:0 /config/custom-cont-init.d /config/custom-services.d
+chmod 755    /config/custom-cont-init.d /config/custom-services.d
+
+log "diretórios de configuração prontos"
