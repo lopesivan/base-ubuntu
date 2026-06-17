@@ -1,0 +1,14 @@
+#!/bin/bash
+# services.d/node-api/run — supervisionado pelo s6
+
+# Carrega variáveis de config se existir
+[[ -f /config/api.env ]] && set -a && source /config/api.env && set +a
+
+export NODE_ENV="${NODE_ENV:-production}"
+export PORT="${PORT:-3000}"
+export DB_PATH="${DB_PATH:-/config/db.sqlite}"
+
+echo "[node-api] iniciando na porta $PORT"
+
+exec /usr/local/bin/su-exec "${USER:-root}" \
+  node /app/dist/index.js
