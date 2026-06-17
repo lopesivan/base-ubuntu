@@ -14,22 +14,12 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # ── Stage 2: runtime ─────────────────────────────────────────────────────────
+# Stage 2
 FROM ivancarlos/xpto-server:amd64-1.2.5
 
-ARG NODE_VERSION="20"
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        curl \
-        ca-certificates \
-    && \
-    curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - && \
-    apt-get install -y --no-install-recommends \
-        nodejs \
-    && \
-    apt-get autoremove -y && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Copia node/npm do builder alpine — sem apt, sem nodesource
+COPY --from=builder /usr/local/bin/node  /usr/local/bin/node
+COPY --from=builder /usr/local/bin/npm   /usr/local/bin/npm
 
 COPY --from=builder /build/dist/        /app/dist/
 COPY --from=builder /build/node_modules /app/node_modules/
