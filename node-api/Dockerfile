@@ -20,7 +20,7 @@ COPY app/ /app/
 
 # Instala dependências e compila TypeScript
 RUN cd /app && \
-    npm ci && \
+    npm install && \
     npm run build && \
     npm prune --production
 
