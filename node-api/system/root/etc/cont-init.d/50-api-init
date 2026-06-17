@@ -1,0 +1,17 @@
+#!/bin/bash
+# cont-init.d/50-api-init
+set -euo pipefail
+
+log() { echo "[api-init] $*"; }
+
+# Copia env padrão se não existir
+if [[ ! -f /config/api.env ]]; then
+  cp /defaults/api.env /config/api.env
+  log "api.env criado em /config/api.env — edite para customizar"
+else
+  log "api.env já existe"
+fi
+
+# Garante permissões do diretório de dados
+mkdir -p /config
+chown -R "${PUID:-1000}:${PGID:-1000}" /config
