@@ -58,7 +58,7 @@ down:
 include ../tools.mk
 
 exec:
-	$(DOCKER) exec -it $(CONTAINER_NAME) bash
+	$(DOCKER) exec -it -u $(UID):$(GID) $(CONTAINER_NAME) bash
 
 exec-root:
 	$(DOCKER) exec -it -u root $(CONTAINER_NAME) bash
