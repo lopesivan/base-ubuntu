@@ -27,11 +27,11 @@ SITE              = $(shell git config user.site 2>/dev/null || echo "ivanlopes.
 EXT_RELEASE_CLEAN = $(MINOR)
 LS_TAG_NUMBER     = $(PATCH)
 
-LATEST            = latest
 IMAGE             = ${MACHINENAME}
+LATEST            = latest
 META_TAG          = ${LATEST}
 VERSION_TAG       = ${LATEST}
-
+TAG               = ${LATEST}
 all: build
 
 disable-x:
