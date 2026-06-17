@@ -49,10 +49,10 @@ build: enable-x
 
 up:
 	mkdir -p config
-	$(COMPOSE) up -d
+	$(DOCKER_COMPOSE) up -d
 
 down:
-	$(COMPOSE) down
+	$(DOCKER_COMPOSE) down
 
 # Tools
 include ../tools.mk
