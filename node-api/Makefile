@@ -7,7 +7,17 @@ COMPOSE        = docker-compose
 
 all: build
 
-build:
+disable-x:
+	chmod -x \
+	system/root/etc/cont-init.d/50-api-init \
+	system/services.d/node-api/run
+
+enable-x:
+	chmod +x \
+	system/root/etc/cont-init.d/50-api-init \
+	system/services.d/node-api/run
+
+build: enable-x
 	$(DOCKER) build -t $(IMAGE):$(TAG) .
 
 up:
