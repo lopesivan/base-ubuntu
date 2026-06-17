@@ -1,0 +1,47 @@
+#!/usr/bin/with-contenv bash
+# cont-init.d/99-custom-scripts
+set -euo pipefail
+
+SCRIPTS_DIR="/config/custom-cont-init.d"
+SERVICES_DIR="/config/custom-services.d"
+
+log() { echo "[custom-init] $*"; }
+
+# --- Scripts de init --------------------------------------------------------
+if [[ -d "$SCRIPTS_DIR" ]] && compgen -G "$SCRIPTS_DIR/*" >/dev/null 2>&1; then
+  log "executando scripts em $SCRIPTS_DIR"
+  for script in "$SCRIPTS_DIR"/*; do
+    name="$(basename "$script")"
+    if [[ ! -f "$script" ]]; then
+      log "$name: não é um arquivo, ignorando"
+      continue
+    fi
+    log "$name: executando..."
+    bash "$script"
+    log "$name: encerrado ($?)"
+  done
+else
+  log "nenhum script customizado em $SCRIPTS_DIR"
+fi
+
+# --- Serviços customizados --------------------------------------------------
+# Remove serviços anteriores para garantir estado limpo
+rm -rf /etc/services.d/custom-service-*
+
+if [[ -d "$SERVICES_DIR" ]] && compgen -G "$SERVICES_DIR/*" >/dev/null 2>&1; then
+  log "registrando serviços em $SERVICES_DIR"
+  for service in "$SERVICES_DIR"/*; do
+    name="$(basename "$service")"
+    if [[ ! -f "$service" ]]; then
+      log "$name: não é um arquivo, ignorando"
+      continue
+    fi
+    svc_dir="/etc/services.d/custom-service-${name}"
+    mkdir -p "$svc_dir"
+    cp "$service" "$svc_dir/run"
+    chmod +x "$svc_dir/run"
+    log "$name: serviço registrado em $svc_dir"
+  done
+else
+  log "nenhum serviço customizado em $SERVICES_DIR"
+fi
