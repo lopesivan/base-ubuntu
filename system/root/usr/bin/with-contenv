@@ -1,19 +1,15 @@
 #!/bin/bash
-# with-contenv — carrega o ambiente do container s6 e executa o comando
-# s6-overlay v3 usa /var/run/s6/legacy-cont-init (compatibilidade)
-# ou /run/s6/container_environment
-
 ENV_DIR="/var/run/s6/container_environment"
 
 if [[ -d "$ENV_DIR" ]]; then
   for f in "$ENV_DIR"/*; do
     [[ -f "$f" ]] || continue
-    export "$(basename "$f")"="$(cat "$f")"
+    varname="$(basename "$f")"
+    [[ "$varname" == "UID" || "$varname" == "GID" ]] && continue
+    export "$varname"="$(cat "$f")"
   done
 fi
 
-if [[ -f "$ENV_DIR/UMASK" ]]; then
-  umask "$(cat "$ENV_DIR/UMASK")"
-fi
+[[ -f "$ENV_DIR/UMASK" ]] && umask "$(cat "$ENV_DIR/UMASK")"
 
 exec "$@"
