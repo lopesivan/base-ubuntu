@@ -7,7 +7,7 @@
 #   git server new exemplo     # se instalado como git-server no PATH
 #
 set -Eeuo pipefail
-[[ "${GIT_SERVER_DEBUG:-0}" == 1 ]] && set -x
+[[ "${GIT_SERVER_DEBUG:-0}" == "1" ]] && set -x
 
 ##############################################################################
 # Configuração
@@ -19,7 +19,7 @@ readonly HTTP_PORT="${GIT_SERVER_HTTP_PORT:-8080}"
 readonly API_BASE="${GIT_SERVER_API_BASE:-http://${SERVER}:${HTTP_PORT}/cgi-bin}"
 
 readonly PROG="${0##*/}"
-readonly VERSION="1.2"
+readonly VERSION="1.4"
 
 ##############################################################################
 # Cores
@@ -32,27 +32,15 @@ RED=$'\033[31m'
 GREEN=$'\033[32m'
 YELLOW=$'\033[33m'
 BLUE=$'\033[34m'
-CYAN=$'\033[36m'
 
 ##############################################################################
 # Logging
 ##############################################################################
 
-log_info() {
-    printf "${BLUE}  ::${RST} %s\n" "$*"
-}
-
-log_ok() {
-    printf "${GREEN}  ✔${RST}  %s\n" "$*"
-}
-
-log_warn() {
-    printf "${YELLOW}  !!${RST} %s\n" "$*"
-}
-
-log_error() {
-    printf "${RED}  ✘${RST}  %s\n" "$*" >&2
-}
+log_info() { printf "${BLUE}  ::${RST} %s\n" "$*"; }
+log_ok() { printf "${GREEN}  ✔${RST}  %s\n" "$*"; }
+log_warn() { printf "${YELLOW}  !!${RST} %s\n" "$*"; }
+log_error() { printf "${RED}  ✘${RST}  %s\n" "$*" >&2; }
 
 die() {
     log_error "$*"
@@ -81,10 +69,12 @@ Uso:
     ${PROG} push
     ${PROG} rm       <repo> [--force]
     ${PROG} clone    [repo]
-    ${PROG} info     <repo>
-    ${PROG} exists   <repo>
+    ${PROG} info     [repo]
+    ${PROG} about    [repo]
+    ${PROG} exists   [repo]
     ${PROG} list
     ${PROG} url      [repo]
+    ${PROG} set-description [repo] <texto>
 
 Fluxo para projeto local:
 
@@ -105,9 +95,11 @@ Exemplos:
 
     ${PROG} new kurumin
     ${PROG} clone kurumin
-    ${PROG} clone              # escolhe com fzf
-    ${PROG} create             # usa o nome do diretório atual
-    ${PROG} publish            # create + push
+    ${PROG} clone
+    ${PROG} create
+    ${PROG} publish
+    ${PROG} set-description "Meu projeto Git"
+    ${PROG} about
     ${PROG} rm kurumin --force
 
 Variáveis:
@@ -117,6 +109,7 @@ Variáveis:
     GIT_SERVER_HTTP_PORT=$HTTP_PORT
     GIT_SERVER_API_BASE=$API_BASE
     GIT_SERVER_DEBUG=0|1
+    GIT_SERVER_DESCRIPTION_MAX=200
 
 USAGE_EOF
 }
@@ -142,18 +135,47 @@ normalize_repo() {
     printf "%s.git\n" "$repo"
 }
 
-current_repo_name() {
-    local name
+repo_from_cwd_name() {
+    local base
 
-    name="$(basename "$PWD")"
-    normalize_repo "$name"
+    base="$(basename "$PWD")"
+    normalize_repo "$base"
+}
+
+repo_from_origin() {
+    local url
+    local repo
+
+    git rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
+        die "não está dentro de um repositório Git"
+
+    url="$(git remote get-url origin 2>/dev/null)" ||
+        die "repositório não possui remote 'origin'"
+
+    repo="${url##*/}"
+    repo="${repo%.git}"
+
+    normalize_repo "$repo"
+}
+
+current_repo() {
+    repo_from_origin
+}
+
+current_repo_name() {
+    current_repo
+}
+
+resolve_repo() {
+    case $# in
+        0) current_repo ;;
+        1) normalize_repo "$1" ;;
+        *) die "argumentos demais para repositório" ;;
+    esac
 }
 
 repo_url() {
-    printf "git://%s:%s/%s\n" \
-        "$SERVER" \
-        "$GIT_PORT" \
-        "$1"
+    printf "git://%s:%s/%s\n" "$SERVER" "$GIT_PORT" "$1"
 }
 
 api_get() {
@@ -162,12 +184,39 @@ api_get() {
     local url="${API_BASE}/${endpoint}"
 
     if [[ -n "$repo" ]]; then
-        url="${url}?repo=${repo}"
+        curl -fsSLG "$url" --data-urlencode "repo=$repo"
+    else
+        curl -fsSL "$url"
     fi
-
-    curl -fsSL "$url"
 }
 
+api_set_description() {
+    local repo="$1"
+    local description="$2"
+    local url="${API_BASE}/set-description"
+
+    curl -fsSLG "$url" \
+        --data-urlencode "repo=$repo" \
+        --data-urlencode "text=$description"
+}
+
+validate_description() {
+    local description="${1:-}"
+    local max_len="${GIT_SERVER_DESCRIPTION_MAX:-200}"
+
+    [[ -n "$description" ]] ||
+        die "descrição vazia"
+
+    ((${#description} <= max_len)) ||
+        die "descrição muito longa: ${#description}/${max_len} caracteres"
+
+    [[ "$description" != *$'\n'* && "$description" != *$'\r'* ]] ||
+        die "descrição deve ter apenas uma linha"
+
+    if LC_ALL=C grep -q '[[:cntrl:]]' <<<"$description"; then
+        die "descrição contém caracteres de controle"
+    fi
+}
 repo_exists() {
     local repo="$1"
     local out
@@ -181,7 +230,6 @@ confirm() {
     local ans
 
     read -rp "$prompt [s/N] " ans
-
     [[ "$ans" =~ ^[sSyY]$ ]]
 }
 
@@ -234,18 +282,23 @@ cmd_new() {
     log_ok "repositório criado"
     log_ok "branch padrão: main"
 
-    printf "\n"
-    printf "Clone:\n"
-    printf "    %s\n\n" "$(repo_url "$repo")"
+    printf "\nClone:\n    %s\n\n" "$(repo_url "$repo")"
 }
 
 cmd_create() {
     local repo
 
     if [[ $# -eq 0 ]]; then
-        repo="$(current_repo_name)"
+        ensure_git_repo
+        if ensure_origin; then
+            repo="$(current_repo)"
+        else
+            repo="$(repo_from_cwd_name)"
+        fi
+    elif [[ $# -eq 1 ]]; then
+        repo="$(normalize_repo "$1")"
     else
-        repo="$(normalize_repo "${1:-}")"
+        die "uso: ${PROG} create [repo]"
     fi
 
     if repo_exists "$repo"; then
@@ -289,8 +342,10 @@ cmd_push() {
 cmd_publish() {
     if [[ $# -eq 0 ]]; then
         cmd_create
-    else
+    elif [[ $# -eq 1 ]]; then
         cmd_create "$1"
+    else
+        die "uso: ${PROG} publish [repo]"
     fi
 
     cmd_push
@@ -300,9 +355,10 @@ cmd_rm() {
     local repo
     local force="${2:-}"
 
+    [[ $# -ge 1 ]] || die "uso: ${PROG} rm <repo> [--force]"
     [[ $# -le 2 ]] || die "argumentos demais para rm"
 
-    repo="$(normalize_repo "${1:-}")"
+    repo="$(normalize_repo "$1")"
 
     repo_exists "$repo" ||
         die "repositório não encontrado: $repo"
@@ -337,8 +393,10 @@ cmd_clone() {
             log_warn "nenhum repositório selecionado"
             exit 1
         }
+    elif [[ $# -eq 1 ]]; then
+        repo="$(normalize_repo "$1")"
     else
-        repo="$(normalize_repo "${1:-}")"
+        die "uso: ${PROG} clone [repo]"
     fi
 
     log_info "git clone $(repo_url "$repo")"
@@ -351,20 +409,60 @@ cmd_fzf_clone() {
 
 cmd_info() {
     local repo
-    if [[ $# -eq 0 ]]; then
-        repo="$(current_repo_name)"
-    else
-        repo="$(normalize_repo "${1:-}")"
-    fi
+
+    repo="$(resolve_repo "$@")"
+
     repo_exists "$repo" ||
         die "repositório não encontrado: $repo"
+
     api_get info "$repo"
+}
+
+cmd_about() {
+    local repo
+
+    repo="$(resolve_repo "$@")"
+
+    repo_exists "$repo" ||
+        die "repositório não encontrado: $repo"
+
+    curl -fsSLG "${API_BASE}/readme" --data-urlencode "repo=$repo" 2>/dev/null ||
+        api_get about "$repo"
+}
+
+cmd_set_description() {
+    local repo
+    local description
+
+    case $# in
+        0)
+            die "uso: ${PROG} set-description [repo] <texto>"
+            ;;
+        1)
+            repo="$(current_repo)"
+            description="$1"
+            ;;
+        *)
+            repo="$(normalize_repo "$1")"
+            shift
+            description="$*"
+            ;;
+    esac
+
+    validate_description "$description"
+
+    repo_exists "$repo" ||
+        die "repositório não encontrado: $repo"
+
+    log_info "atualizando descrição de $repo"
+    api_set_description "$repo" "$description"
+    log_ok "descrição atualizada"
 }
 
 cmd_exists() {
     local repo
 
-    repo="$(normalize_repo "${1:-}")"
+    repo="$(resolve_repo "$@")"
 
     if repo_exists "$repo"; then
         log_ok "$repo existe"
@@ -381,12 +479,7 @@ cmd_list() {
 cmd_url() {
     local repo
 
-    if [[ $# -eq 0 ]]; then
-        repo="$(current_repo_name)"
-    else
-        repo="$(normalize_repo "${1:-}")"
-    fi
-
+    repo="$(resolve_repo "$@")"
     repo_url "$repo"
 }
 
@@ -399,58 +492,51 @@ main() {
     need_bin git
 
     local cmd="${1:-}"
-
     shift || true
 
     case "$cmd" in
         new)
             cmd_new "$@"
             ;;
-
         create)
             cmd_create "$@"
             ;;
-
         push)
             cmd_push "$@"
             ;;
-
         publish)
             cmd_publish "$@"
             ;;
-
         rm | remove | delete)
             cmd_rm "$@"
             ;;
-
         clone)
             cmd_clone "$@"
             ;;
-
         fzf-clone | pick | pick-clone)
             cmd_fzf_clone
             ;;
-
         info)
             cmd_info "$@"
             ;;
-
+        about | readme)
+            cmd_about "$@"
+            ;;
+        set-description | description | desc)
+            cmd_set_description "$@"
+            ;;
         exists)
             cmd_exists "$@"
             ;;
-
         list | ls)
             cmd_list
             ;;
-
         url)
             cmd_url "$@"
             ;;
-
         "" | -h | --help | help)
             usage
             ;;
-
         *)
             die "comando desconhecido: $cmd"
             ;;
