@@ -1,0 +1,3 @@
+#!/bin/bash
+# services.d/sshd/run
+exec /usr/sbin/sshd -D -e
