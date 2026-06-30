@@ -101,6 +101,7 @@ up: config
 # Tools
 include tools.mk
 include test.mk
+include exec.mk
 
 run: config
 	# create user ${USER}
@@ -113,19 +114,5 @@ run: config
 		${VOLUMES} \
 		-w/home/$$(id -u -n) \
 		${SERVICE}
-
-exec:
-	$(DOCKER_COMPOSE) exec $(CONTAINER_NAME) entrypoint.sh /bin/bash -l
-
-exec-root:
-	$(DOCKER) exec -it -u root $(CONTAINER_NAME) bash
-
-create-dirs:
-	mkdir opt
-
-rm-dirs:
-	sudo rm -rf opt
-
-reset: rm-dirs create-dirs
 
 # eof
