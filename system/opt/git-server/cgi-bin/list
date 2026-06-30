@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+echo "Content-Type: text/plain"
+echo
+
+find /srv/git \
+    -mindepth 1 \
+    -maxdepth 1 \
+    -type d \
+    -name '*.git' \
+    -exec basename {} \; \
+| sort
+
