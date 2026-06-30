@@ -1,0 +1,44 @@
+#!/usr/bin/with-contenv bash
+# cont-init.d/20-sshd — gera chaves do host SSH se não existirem
+set -euo pipefail
+
+log() { echo "[sshd-init] $*"; }
+
+SSH_DIR="/etc/ssh"
+
+for type in rsa ecdsa ed25519; do
+    keyfile="${SSH_DIR}/ssh_host_${type}_key"
+    if [[ ! -f "$keyfile" ]]; then
+        log "Gerando chave do host: $type"
+        ssh-keygen -t "$type" -N "" -f "$keyfile" >/dev/null
+    else
+        log "Chave $type já existe"
+    fi
+done
+
+# Configuração mínima do sshd
+cat > /etc/ssh/sshd_config <<'EOF'
+Port 22
+AddressFamily any
+ListenAddress 0.0.0.0
+
+PermitRootLogin no
+PasswordAuthentication no
+ChallengeResponseAuthentication no
+UsePAM no
+
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+
+AllowTcpForwarding no
+X11Forwarding no
+PrintMotd no
+
+# Permite apenas o usuário git (criado em 10-adduser)
+# Se USER não for git, permite o USER definido
+AllowUsers ${USER:-git}
+
+AcceptEnv LANG LC_*
+EOF
+
+log "sshd_config atualizado"
