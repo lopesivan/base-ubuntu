@@ -26,3 +26,5 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     print(f"[xpto-server] ouvindo em {HOST}:{PORT}", flush=True)
     HTTPServer((HOST, PORT), Handler).serve_forever()
+
+###
