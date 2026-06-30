@@ -103,8 +103,9 @@ up: config
 
 # Tools
 include tools.mk
-include test.mk
 include exec.mk
+include git-server.mk
+include xpto-server.mk
 
 run: config
 	# create user ${USER}
