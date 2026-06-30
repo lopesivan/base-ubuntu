@@ -57,6 +57,7 @@ init-dirs:
 
 # --- build ------------------------------------------------------------------
 build: enable-x
+	make -C system/su-exec
 	$(DOCKER) build $(BUILD_OPTS) .
 
 # --- run / up ---------------------------------------------------------------
@@ -149,8 +150,31 @@ images:
 fix:
 	$(DOCKER) images -q --filter "dangling=true" | xargs $(DOCKER) rmi -f
 
+pause:
+	$(DOCKER) $@ $(CONTAINER_NAME)
+unpause:
+	$(DOCKER) $@ $(CONTAINER_NAME)
+
+images:
+	$(DOCKER) images --format "{{.Repository}}:{{.Tag}}"| sort
+ls:
+	$(DOCKER) images --format "{{.ID}}: {{.Repository}}"
+size:
+	$(DOCKER) images --format "{{.Size}}\t: {{.Repository}}"
+tags:
+	$(DOCKER) images --format "{{.Tag}}\t: {{.Repository}}"| sort -t ':' -k2 -n
+
+net:
+	$(DOCKER) network ls
+
+rm-network:
+	$(DOCKER) network ls| awk '$$2 !~ "(bridge|host|none)" {print "docker network rm " $$1}' | sed '1d'
+
 rmi: disable-x
 	$(DOCKER) rmi $(IMAGE):$(META_TAG)
+	make -C system/su-exec clean
+
+rmi: disable-x
 
 # --- permissões -------------------------------------------------------------
 SCRIPTS = \
