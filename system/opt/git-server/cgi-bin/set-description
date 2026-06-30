@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+echo "Content-Type: text/plain; charset=utf-8"
+echo
+
+urldecode() {
+    local data="${1//+/ }"
+    printf '%b' "${data//%/\\x}"
+}
+
+query_get() {
+    local key="$1"
+    local pair name value
+
+    IFS='&' read -ra pairs <<<"${QUERY_STRING:-}"
+
+    for pair in "${pairs[@]}"; do
+        name="${pair%%=*}"
+        value="${pair#*=}"
+
+        if [[ "$name" == "$key" ]]; then
+            urldecode "$value"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+die() {
+    echo "error: $*"
+    exit 1
+}
+
+normalize_repo() {
+    local repo="${1:-}"
+
+    [[ -n "$repo" ]] || die "missing repo"
+
+    repo="${repo#/}"
+    repo="${repo%.git}"
+
+    [[ "$repo" != *..* ]] || die "invalid repo"
+    [[ "$repo" != */* ]] || die "invalid repo"
+    [[ "$repo" =~ ^[A-Za-z0-9._-]+$ ]] || die "invalid repo"
+
+    printf '%s.git\n' "$repo"
+}
+
+validate_description() {
+    local text="${1:-}"
+    local max_len="${GIT_DESCRIPTION_MAX:-200}"
+
+    [[ -n "$text" ]] || die "empty description"
+
+    (( ${#text} <= max_len )) ||
+        die "description too long: ${#text}/${max_len}"
+
+    [[ "$text" != *$'\n'* && "$text" != *$'\r'* ]] ||
+        die "description must be one line"
+
+    if LC_ALL=C grep -q '[^[:print:][:space:]]' <<<"$text"; then
+        die "description contains control characters"
+    fi
+}
+
+repo="$(normalize_repo "$(query_get repo || true)")"
+text="$(query_get text || true)"
+
+validate_description "$text"
+
+path="/srv/git/$repo"
+
+[[ -d "$path" ]] || die "not found: $repo"
+
+printf '%s\n' "$text" > "$path/description"
+
+echo "ok"
+echo "repo=$repo"
+echo "description=$text"
