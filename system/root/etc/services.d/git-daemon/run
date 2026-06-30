@@ -1,4 +1,4 @@
 #!/usr/bin/with-contenv bash
 set -Eeuo pipefail
 
-exec /opt/git-server/git-daemon.sh
+exec as-user bash /opt/git-server/git-daemon.sh
