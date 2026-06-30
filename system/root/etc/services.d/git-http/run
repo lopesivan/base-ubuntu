@@ -1,0 +1,6 @@
+#!/usr/bin/with-contenv bash
+set -Eeuo pipefail
+
+cd /opt/git-server
+
+exec ./git-http.sh
