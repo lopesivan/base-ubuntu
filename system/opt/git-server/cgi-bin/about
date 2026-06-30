@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+echo "Content-Type: text/plain; charset=utf-8"
+echo
+
+repo="${QUERY_STRING#repo=}"
+repo="${repo%.git}.git"
+
+case "$repo" in
+    ""|".git"|*/*|*..*)
+        echo "invalid repo"
+        exit 1
+        ;;
+esac
+
+path="/srv/git/$repo"
+
+if [ ! -d "$path" ]; then
+    echo "not found: $repo"
+    exit 1
+fi
+
+desc="$(cat "$path/description" 2>/dev/null || true)"
+
+echo "Projeto: $repo"
+echo
+echo "Descrição:"
+echo "${desc:-Sem descrição cadastrada.}"
+echo
+echo "Clone:"
+echo "git clone git://$SERVER_NAME:9418/$repo"
