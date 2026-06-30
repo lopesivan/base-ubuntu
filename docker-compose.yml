@@ -6,11 +6,12 @@ services:
     container_name: ${CONTAINER_NAME}
     hostname: ${HOSTNAME}
     working_dir: /home/${USER}
-    ports: [8989:443]
+    ports: [8989:443, 8080:8080, 9418:9418]
     volumes:
       - ./system/opt/xpto-server:/opt/xpto-server
       - ./system/root/etc/services.d:/etc/services.d
       - ./home:/home/${USER}
+      - ./repos:/srv/git
     environment:
       - PUID=${UID}
       - PGID=${GID}
