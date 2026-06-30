@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+echo "Content-Type: text/plain"
+echo
+
+repo="${QUERY_STRING#repo=}"
+repo="${repo%.git}.git"
+
+case "$repo" in
+    ""|".git"|*/*|*..*) echo "invalid repo"; exit 1 ;;
+esac
+
+path="/srv/git/$repo"
+
+if [ ! -d "$path" ]; then
+    echo "not found: $repo"
+    exit 1
+fi
+
+rm -rf "$path"
+
+echo "deleted: $repo"
+
