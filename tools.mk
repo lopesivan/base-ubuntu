@@ -64,12 +64,9 @@ rm:
 clean: stop rm
 	# xpto-server
 	chmod -x system/root/etc/services.d/xpto-server/run
-	chmod -x system/opt/xpto-server/server.py
 	# git-server
 	chmod -x system/root/etc/services.d/git-http/run
 	chmod -x system/root/etc/services.d/git-daemon/run
-	chmod -x system/opt/git-server/git-daemon.sh
-	chmod -x system/opt/git-server/git-http.sh
 
 su-exec:
 	make -C system/su-exec
