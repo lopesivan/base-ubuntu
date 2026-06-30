@@ -89,8 +89,14 @@ build: su-exec
 	$(DOCKER) build $(BUILD_OPTS) .
 
 up: config
+	# xpto-server
 	chmod +x system/root/etc/services.d/xpto-server/run
 	chmod +x system/opt/xpto-server/server.py
+	# git-server
+	chmod +x system/root/etc/services.d/git-http/run
+	chmod +x system/root/etc/services.d/git-daemon/run
+	chmod +x system/opt/git-server/git-daemon.sh
+	chmod +x system/opt/git-server/git-http.sh
 	$(DOCKER_COMPOSE) up -d ${SERVICE}
 
 # down:
