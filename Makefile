@@ -1,217 +1,174 @@
 include .version
 
-NAME              = xpto-server
-USER              = $(shell id -u -n)
-GROUP             = $(shell id -g -n)
-UID               = $(shell id -u)
-GID               = $(shell id -g)
-env-file          = env.production
-GITHUB_USER       = ivancarlos
+NAME        = git-server-simple
+USER        = $(shell id -u -n)
+GROUP       = $(shell id -g -n)
+UID         = $(shell id -u)
+GID         = $(shell id -g)
+GITHUB_USER = ivancarlos
 
-VERSION           = $(MAJOR).$(MINOR).$(PATCH)
-SERVICE           = ${NAME}
-OWNER             = ${GITHUB_USER}
-MACHINENAME       = $(OWNER)/$(NAME)
+VERSION     = $(MAJOR).$(MINOR).$(PATCH)
+OWNER       = $(GITHUB_USER)
+MACHINENAME = $(OWNER)/$(NAME)
 
-DOCKER            = docker
-CONTAINER_NAME    = $(NAME)
-EMAIL             = $(shell git config user.email)
+DOCKER         = docker
+CONTAINER_NAME = $(NAME)
+IMAGE          = $(MACHINENAME)
+META_TAG       = amd64-$(VERSION)
 
-LATEST            = $(VERSION)
-GITHUB_DATE       = $(shell date "+%Y%m%d")
-
-COMMIT_SHA        = $(shell git rev-parse --verify HEAD 2>/dev/null || echo "unknown")
-SITE              = $(shell git config user.site 2>/dev/null || echo "ivanlopes.eng.br")
+GITHUB_DATE = $(shell date "+%Y%m%d")
+COMMIT_SHA  = $(shell git rev-parse --verify HEAD 2>/dev/null || echo "unknown")
+SITE        = $(shell git config user.site 2>/dev/null || echo "ivanlopes.eng.br")
 
 EXT_RELEASE_CLEAN = $(MINOR)
 LS_TAG_NUMBER     = $(PATCH)
 
-IMAGE             = ${MACHINENAME}
-META_TAG          = amd64-${VERSION}
-VERSION_TAG       = ${LATEST}
+##############################################################################
+
+# /home/$USER montado do host — repos ficam em ./home/$USER/repos
+VOLUMES = \
+    -v $(PWD)/home:/home/$(USER)
+
+ENV_VARS = \
+    -e USER=$(USER)   \
+    -e GROUP=$(GROUP) \
+    -e PUID=$(UID)    \
+    -e PGID=$(GID)
+
+BUILD_LABEL = \
+    --label "org.opencontainers.image.created=$(GITHUB_DATE)"                      \
+    --label "org.opencontainers.image.authors=$(SITE)"                             \
+    --label "org.opencontainers.image.version=$(EXT_RELEASE_CLEAN)-ls$(LS_TAG_NUMBER)" \
+    --label "org.opencontainers.image.revision=$(COMMIT_SHA)"                      \
+    --label "org.opencontainers.image.title=git-server-simple"                     \
+    --label "org.opencontainers.image.description=SSH + git-daemon on s6"
+
+BUILD_OPTS = $(BUILD_LABEL) \
+    -t $(IMAGE):$(META_TAG) \
+    --build-arg VERSION="$(VERSION)" \
+    --build-arg BUILD_DATE="$(GITHUB_DATE)"
 
 ##############################################################################
 
-VOLUMES = -v `pwd`/system/root/etc/cont-init.d:/etc/cont-init.d \
-          -v `pwd`/system/opt/sdk:/opt/sdk \
-          -v `pwd`/system/var/sdk:/var/sdk \
-          -v `pwd`/system/etc/sdk:/etc/sdk
-
-BUILD_LABEL       = \
-    --label "org.opencontainers.image.created=${GITHUB_DATE}" \
-    --label "org.opencontainers.image.authors=${SITE}" \
-    --label "org.opencontainers.image.url=https://github.com/${GITHUB_USER}/docker-baseimage-ubuntu/packages" \
-    --label "org.opencontainers.image.documentation=https://docs.${SITE}/images/docker-baseimage-ubuntu" \
-    --label "org.opencontainers.image.source=https://github.com/${GITHUB_USER}/docker-baseimage-ubuntu" \
-    --label "org.opencontainers.image.version=${EXT_RELEASE_CLEAN}-ls${LS_TAG_NUMBER}" \
-    --label "org.opencontainers.image.revision=${COMMIT_SHA}" \
-    --label "org.opencontainers.image.vendor=${SITE}" \
-    --label "org.opencontainers.image.licenses=GPL-3.0-only" \
-    --label "org.opencontainers.image.ref.name=${COMMIT_SHA}" \
-    --label "org.opencontainers.image.title=Baseimage-ubuntu" \
-    --label "org.opencontainers.image.description=baseimage-ubuntu image by $(shell git config user.name)"
-
-BUILD_OPTS = $(BUILD_LABEL) -t ${IMAGE}:${META_TAG} --build-arg VERSION="${VERSION_TAG}" --build-arg BUILD_DATE=${GITHUB_DATE}
-
 all: status
 
-init:
-	sudo chown ${USER}:${USER} -R system/
+init-dirs:
+	mkdir -p home/$(USER)/repos
 
-# ── sem docker-compose, só gera o env-file ────────────────────────────────
-config:
-	@echo META_TAG=$(META_TAG)             > ${env-file}
-	@echo IMAGE=$(IMAGE)                   >> ${env-file}
-	@echo CONTAINER_NAME=$(CONTAINER_NAME) >> ${env-file}
-	@echo HOSTNAME=${NAME}                 >> ${env-file}
-	@echo SERVICE=${SERVICE}               >> ${env-file}
-	@echo USER=${USER}                     >> ${env-file}
-	@echo GROUP=${GROUP}                   >> ${env-file}
-	@echo UID=${UID}                       >> ${env-file}
-	@echo GID=${GID}                       >> ${env-file}
+# --- build ------------------------------------------------------------------
+build: enable-x
+	$(DOCKER) build $(BUILD_OPTS) .
 
-# ── sobe em background (substitui docker-compose up) ─────────────────────
-up: config
-	$(DOCKER) run -d \
+# --- run / up ---------------------------------------------------------------
+up: init-dirs
+	$(DOCKER) run -d        \
 		--name $(CONTAINER_NAME) \
-		--hostname $(NAME) \
-		-p 8989:443 \
-		-e USER=$(USER) \
-		-e GROUP=$(GROUP) \
-		-e UID=$(UID) \
-		-e GID=$(GID) \
-		-e PUID=$(UID) \
-		-e PGID=$(GID) \
-		-v `pwd`/home:/home/$(USER) \
-		$(VOLUMES) \
-		-w /home/$(USER) \
+		--hostname $(NAME)       \
+		-p 2222:22               \
+		-p 9418:9418             \
+		$(ENV_VARS)              \
+		$(VOLUMES)               \
 		$(IMAGE):$(META_TAG)
 
-# ── interativo, efêmero, com usuário correto ─────────────────────────────
-run:
-	$(DOCKER) run -it --rm \
+run: init-dirs
+	$(DOCKER) run -it --rm  \
 		--name $(CONTAINER_NAME) \
-		--hostname $(NAME) \
-		-p 8989:443 \
-		-e USER=$$(id -u -n) \
-		-e GROUP=$$(id -g -n) \
-		-e UID=$$(id -u) \
-		-e GID=$$(id -g) \
-		-e PUID=$$(id -u) \
-		-e PGID=$$(id -g) \
-		-v `pwd`/home:/home/$$(id -u -n) \
-		$(VOLUMES) \
-		-w /home/$$(id -u -n) \
+		--hostname $(NAME)       \
+		-p 2222:22               \
+		-p 9418:9418             \
+		-e USER=$$(id -u -n)     \
+		-e GROUP=$$(id -g -n)    \
+		-e PUID=$$(id -u)        \
+		-e PGID=$$(id -g)        \
+		$(VOLUMES)               \
 		$(IMAGE):$(META_TAG)
 
-# ── interativo, efêmero, como root ───────────────────────────────────────
-run-as-root:
-	$(DOCKER) run -it --rm \
+run-as-root: init-dirs
+	$(DOCKER) run -it --rm       \
 		--name $(CONTAINER_NAME)-root \
-		--hostname $(NAME) \
-		-u root \
-		-v `pwd`:/host \
-		$(VOLUMES) \
-		-w /host \
+		--hostname $(NAME)            \
+		-u root                       \
+		-v $(PWD):/host               \
+		$(VOLUMES)                    \
+		-w /host                      \
 		$(IMAGE):$(META_TAG)
 
-# ── exec em container rodando ────────────────────────────────────────────
+# --- exec -------------------------------------------------------------------
 exec:
-	$(DOCKER) exec -it $(CONTAINER_NAME) entrypoint.sh /bin/bash -l
+	$(DOCKER) exec -it $(CONTAINER_NAME) /bin/bash -l
 
 exec-root:
 	$(DOCKER) exec -it -u root $(CONTAINER_NAME) bash
 
-ps:
-	$(DOCKER) ps -a
+# --- repos ------------------------------------------------------------------
+# Cria um bare repo pronto para SSH e git-daemon
+# Uso: make new-repo REPO=meu-projeto
+new-repo:
+	@test -n "$(REPO)" || (echo "uso: make new-repo REPO=nome" && exit 1)
+	$(DOCKER) exec -it -u $(USER) $(CONTAINER_NAME) \
+		bash -c 'git init --bare ~/repos/$(REPO).git && \
+		         touch ~/repos/$(REPO).git/git-daemon-export-ok && \
+		         echo "$(REPO).git criado"'
 
-status:
-	$(DOCKER) stats --all --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
+# Lista repos no container
+list-repos:
+	$(DOCKER) exec $(CONTAINER_NAME) \
+		bash -c 'ls -1 /srv/git/*.git 2>/dev/null || echo "(nenhum repo ainda)"'
 
-pause:
-	$(DOCKER) $@ $(CONTAINER_NAME)
-unpause:
-	$(DOCKER) $@ $(CONTAINER_NAME)
+# Adiciona chave pública ao authorized_keys do usuário
+# Uso: make add-key KEY="ssh-ed25519 AAAA..."
+add-key:
+	@test -n "$(KEY)" || (echo "uso: make add-key KEY=\"ssh-ed25519 ...\"" && exit 1)
+	$(DOCKER) exec $(CONTAINER_NAME) \
+		bash -c 'echo "$(KEY)" >> /home/$(USER)/.ssh/authorized_keys && echo "chave adicionada"'
 
-images:
-	$(DOCKER) images --format "{{.Repository}}:{{.Tag}}"| sort
-ls:
-	$(DOCKER) images --format "{{.ID}}: {{.Repository}}"
-size:
-	$(DOCKER) images --format "{{.Size}}\t: {{.Repository}}"
-tags:
-	$(DOCKER) images --format "{{.Tag}}\t: {{.Repository}}"| sort -t ':' -k2 -n
-
-net:
-	$(DOCKER) network ls
-
-rm-network:
-	$(DOCKER) network ls| awk '$$2 !~ "(bridge|host|none)" {print "docker network rm " $$1}' | sed '1d'
-
-rmi: disable-x
-	docker rmi ${MACHINENAME}:${META_TAG}
-	make -C system/su-exec clean
-
-rm-all:
-	$(DOCKER) ps -aq -f status=exited| xargs $(DOCKER) rm
-
-stop-all:
-	$(DOCKER) ps -aq -f status=running| xargs $(DOCKER) stop
-
-log:
-	$(DOCKER) logs -f $(CONTAINER_NAME)
-
-ip:
-	$(DOCKER) ps -q \
-	| xargs $(DOCKER) inspect --format '{{ .Name }}:{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'\
-	| \sed 's/^.*://'
-
-memory:
-	$(DOCKER) inspect `$(DOCKER) ps -aq` | grep -i mem
-
-fix:
-	$(DOCKER) images -q --filter "dangling=true"| xargs $(DOCKER) rmi -f
-
+# --- ciclo de vida ----------------------------------------------------------
 stop:
 	$(DOCKER) stop $(CONTAINER_NAME)
 
 rm:
 	$(DOCKER) rm $(CONTAINER_NAME)
 
-su-exec:
-	make -C system/su-exec
-
-disable-x:
-	chmod -x system/opt/sdk/bin/sdk.sh \
-	system/entrypoint.sh \
-	system/root/usr/bin/with-contenv \
-	system/root/etc/cont-init.d/90-custom-folders \
-	system/root/etc/cont-init.d/99-custom-scripts \
-	system/root/etc/cont-init.d/01-envfile \
-	system/root/etc/cont-init.d/10-adduser
-
-enable-x:
-	chmod +x system/opt/sdk/bin/sdk.sh \
-	system/entrypoint.sh \
-	system/root/usr/bin/with-contenv \
-	system/root/etc/cont-init.d/90-custom-folders \
-	system/root/etc/cont-init.d/99-custom-scripts \
-	system/root/etc/cont-init.d/01-envfile \
-	system/root/etc/cont-init.d/10-adduser
-
-build: su-exec enable-x
-	$(DOCKER) build $(BUILD_OPTS) .
-
-create-dirs:
-	mkdir opt
-
-rm-dirs:
-	sudo rm -rf opt
+clean: stop rm
 
 restart:
 	$(DOCKER) restart $(CONTAINER_NAME)
 
-reset: rm-dirs create-dirs
-clean: stop rm
+log:
+	$(DOCKER) logs -f $(CONTAINER_NAME)
+
+status:
+	$(DOCKER) stats --all --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
+
+ps:
+	$(DOCKER) ps -a
+
+images:
+	$(DOCKER) images --format "{{.Repository}}:{{.Tag}}" | sort
+
+fix:
+	$(DOCKER) images -q --filter "dangling=true" | xargs $(DOCKER) rmi -f
+
+rmi: disable-x
+	$(DOCKER) rmi $(IMAGE):$(META_TAG)
+
+# --- permissões -------------------------------------------------------------
+SCRIPTS = \
+    system/entrypoint.sh                          \
+    system/root/usr/bin/with-contenv              \
+    system/root/etc/cont-init.d/01-envfile        \
+    system/root/etc/cont-init.d/10-adduser        \
+    system/root/etc/cont-init.d/20-sshd           \
+    system/root/etc/cont-init.d/30-git            \
+    system/root/etc/cont-init.d/90-custom-folders \
+    system/root/etc/cont-init.d/99-custom-scripts \
+    system/root/etc/services.d/sshd/run           \
+    system/root/etc/services.d/git-daemon/run
+
+enable-x:
+	chmod +x $(SCRIPTS)
+
+disable-x:
+	chmod -x $(SCRIPTS)
 
 # eof
