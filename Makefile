@@ -15,6 +15,8 @@ USER              = $(shell id -u -n)
 GROUP             = $(shell id -g -n)
 UID               = $(shell id -u)
 GID               = $(shell id -g)
+REPO_NAME         = $(shell basename `git rev-parse --show-toplevel`)
+
 env-file          = env.production
 GITHUB_USER       = ivancarlos
 
@@ -51,9 +53,9 @@ VOLUMES = -v `pwd`/system/root/etc/cont-init.d:/etc/cont-init.d \
 BUILD_LABEL       = \
 	--label "org.opencontainers.image.created=${GITHUB_DATE}" \
 	--label "org.opencontainers.image.authors=${SITE}" \
-	--label "org.opencontainers.image.url=https://github.com/${GITHUB_USER}/docker-baseimage-ubuntu/packages" \
-	--label "org.opencontainers.image.documentation=https://docs.${SITE}/images/docker-baseimage-ubuntu" \
-	--label "org.opencontainers.image.source=https://github.com/${GITHUB_USER}/docker-baseimage-ubuntu" \
+	--label "org.opencontainers.image.url=https://github.com/${GITHUB_USER}/$(REPO_NAME)/packages" \
+	--label "org.opencontainers.image.documentation=https://docs.${SITE}/images/$(REPO_NAME)" \
+	--label "org.opencontainers.image.source=https://github.com/${GITHUB_USER}/$(REPO_NAME)" \
 	--label "org.opencontainers.image.version=${EXT_RELEASE_CLEAN}-ls${LS_TAG_NUMBER}" \
 	--label "org.opencontainers.image.revision=${COMMIT_SHA}" \
 	--label "org.opencontainers.image.vendor=${SITE}" \
@@ -83,25 +85,7 @@ config:
 	@echo GID=${GID}                       >> ${env-file}
 	$(DOCKER_COMPOSE) config
 
-disable-x:
-	chmod -x system/opt/sdk/bin/sdk.sh \
-	system/entrypoint.sh \
-	system/root/usr/bin/with-contenv \
-	system/root/etc/cont-init.d/90-custom-folders \
-	system/root/etc/cont-init.d/99-custom-scripts \
-	system/root/etc/cont-init.d/01-envfile \
-	system/root/etc/cont-init.d/10-adduser
-
-enable-x:
-	chmod +x system/opt/sdk/bin/sdk.sh \
-	system/entrypoint.sh \
-	system/root/usr/bin/with-contenv \
-	system/root/etc/cont-init.d/90-custom-folders \
-	system/root/etc/cont-init.d/99-custom-scripts \
-	system/root/etc/cont-init.d/01-envfile \
-	system/root/etc/cont-init.d/10-adduser
-
-build: su-exec enable-x
+build: su-exec
 	$(DOCKER) build $(BUILD_OPTS) .
 
 up: config
@@ -131,11 +115,6 @@ exec:
 exec-root:
 	$(DOCKER) exec -it -u root $(CONTAINER_NAME) bash
 
-su-exec:
-	make -C system/su-exec
-
-clean-su-exec:
-	make -C system/su-exec clean
 create-dirs:
 	mkdir opt
 
