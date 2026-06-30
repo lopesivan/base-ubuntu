@@ -1,0 +1,9 @@
+#!/usr/bin/with-contenv bash
+set -euo pipefail
+
+echo "[xpto-server] iniciando servidor HTTP"
+
+exec /usr/bin/python3 \
+         /opt/xpto-server/server.py
+
+#exit 0
