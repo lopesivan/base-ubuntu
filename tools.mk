@@ -29,7 +29,7 @@ net:
 rm-network:
 	$(DOCKER) network ls| awk '$$2 !~ "(bridge|host|none)" {print "docker network rm " $$1}' | sed '1d'
 
-rmi: disable-x
+rmi: clean-su-exec
 	docker rmi ${MACHINENAME}:${META_TAG}
 
 rm-all:
@@ -61,6 +61,11 @@ stop:
 rm:
 	$(DOCKER) rm $(CONTAINER_NAME)
 
-clean: stop rm
+clean: stop rm clean-su-exec
 
+su-exec:
+	make -C system/su-exec
+
+clean-su-exec:
+	make -C system/su-exec clean
 ##############################################################################
