@@ -89,13 +89,18 @@ build: su-exec
 	$(DOCKER) build $(BUILD_OPTS) .
 
 up: config
+	chmod +x system/root/etc/services.d/xpto-server/run
+	chmod +x system/opt/xpto-server/server.py
 	$(DOCKER_COMPOSE) up -d ${SERVICE}
 
-down:
-	$(COMPOSE) down
+# down:
+# 	chmod -x system/root/etc/services.d/xpto-server/run
+# 	chmod -x system/opt/xpto-server/server.py
+# 	$(COMPOSE) down
 
 # Tools
 include tools.mk
+include test.mk
 
 run: config
 	# create user ${USER}
