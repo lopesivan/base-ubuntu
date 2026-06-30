@@ -1,0 +1,7 @@
+#!/bin/bash
+# services.d/gitea/run
+_USER="${USER:-git}"
+
+exec /usr/local/bin/su-exec "${_USER}" \
+    /usr/local/bin/gitea web \
+        --config /etc/gitea/app.ini
