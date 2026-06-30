@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+echo "Content-Type: text/plain"
+echo
+
+repo="${QUERY_STRING#repo=}"
+repo="${repo%.git}.git"
+
+case "$repo" in
+    ""|".git"|*/*|*..*) echo "no"; exit 1 ;;
+esac
+
+if [ -d "/srv/git/$repo" ]; then
+    echo "yes"
+else
+    echo "no"
+    exit 1
+fi
