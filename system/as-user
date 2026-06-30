@@ -1,47 +1,42 @@
 #!/bin/bash
-# entrypoint.sh — cria grupo/usuário e troca para ele via su-exec
+# as-user — cria grupo/usuário e troca para ele via su-exec
 set -euo pipefail
 
-log() { echo "[entrypoint] $*"; }
-die() { log "ERROR: $*"; exit 1; }
+log() { echo "[as-user] $*"; }
 
-# Variáveis obrigatórias para rodar como não-root
-USER="${USER:-}"
-GROUP="${GROUP:-}"
-UID="${UID:-}"
-GID="${GID:-}"
+_USER="${USER:-}"
+_GROUP="${GROUP:-}"
+_USER_ID="${PUID:-${UID:-}}"
+_GROUP_ID="${PGID:-${GID:-}}"
 
-log "USER=${USER} GROUP=${GROUP} UID=${UID} GID=${GID}"
+log "USER=${_USER} GROUP=${_GROUP} UID=${_USER_ID} GID=${_GROUP_ID}"
 
-if [[ -z "$GID" || -z "$UID" || -z "$USER" || -z "$GROUP" ]]; then
-  log "Rodando como root (variáveis de usuário não definidas)"
-  exec "$@"
+if [[ -z "$_GROUP_ID" || -z "$_USER_ID" || -z "$_USER" || -z "$_GROUP" ]]; then
+    log "Rodando como root"
+    exec "$@"
 fi
 
-# --- Grupo ------------------------------------------------------------------
-if getent group "$GID" >/dev/null 2>&1; then
-  log "GID $GID já existe"
-elif getent group "$GROUP" >/dev/null 2>&1; then
-  log "Grupo $GROUP já existe com GID diferente"
+if getent group "$_GROUP_ID" >/dev/null 2>&1; then
+    log "GID $_GROUP_ID já existe"
+elif getent group "$_GROUP" >/dev/null 2>&1; then
+    log "Grupo $_GROUP já existe com GID diferente"
 else
-  log "Criando grupo $GROUP com GID $GID"
-  groupadd -g "$GID" "$GROUP"
+    log "Criando grupo $_GROUP com GID $_GROUP_ID"
+    groupadd -g "$_GROUP_ID" "$_GROUP"
 fi
 
-# --- Usuário ----------------------------------------------------------------
-if getent passwd "$UID" >/dev/null 2>&1; then
-  log "UID $UID já existe"
-elif getent passwd "$USER" >/dev/null 2>&1; then
-  log "Usuário $USER já existe com UID diferente"
+if getent passwd "$_USER_ID" >/dev/null 2>&1; then
+    log "UID $_USER_ID já existe"
+elif getent passwd "$_USER" >/dev/null 2>&1; then
+    log "Usuário $_USER já existe com UID diferente"
 else
-  log "Criando usuário $USER (UID=$UID GID=$GID)"
-  useradd -u "$UID" -g "$GID" -M -s /bin/bash "$USER"
+    log "Criando usuário $_USER UID=$_USER_ID GID=$_GROUP_ID"
+    useradd -u "$_USER_ID" -g "$_GROUP_ID" -M -s /bin/bash "$_USER"
 fi
 
-# --- HOME -------------------------------------------------------------------
-export HOME="/home/$USER"
+export HOME="/home/$_USER"
 mkdir -p "$HOME"
-chown "$USER:$GROUP" "$HOME"
+chown "$_USER:$_GROUP" "$HOME"
 
-log "Executando como $USER: $*"
-exec /usr/local/bin/su-exec "$USER" "$@"
+log "Executando como $_USER: $*"
+exec /usr/local/bin/su-exec "$_USER" "$@"
