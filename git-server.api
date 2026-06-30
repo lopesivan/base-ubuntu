@@ -1,0 +1,459 @@
+#!/usr/bin/env bash
+#
+# git-server - Gerencia repositórios Git usando API CGI do servidor.
+#
+# Pode ser usado como:
+#   git-server new exemplo
+#   git server new exemplo     # se instalado como git-server no PATH
+#
+set -Eeuo pipefail
+[[ "${GIT_SERVER_DEBUG:-0}" == 1 ]] && set -x
+
+##############################################################################
+# Configuração
+##############################################################################
+
+readonly SERVER="${GIT_SERVER_HOST:-game}"
+readonly GIT_PORT="${GIT_SERVER_PORT:-9418}"
+readonly HTTP_PORT="${GIT_SERVER_HTTP_PORT:-8080}"
+readonly API_BASE="${GIT_SERVER_API_BASE:-http://${SERVER}:${HTTP_PORT}/cgi-bin}"
+
+readonly PROG="${0##*/}"
+readonly VERSION="1.2"
+
+##############################################################################
+# Cores
+##############################################################################
+
+RST=$'\033[0m'
+BOLD=$'\033[1m'
+
+RED=$'\033[31m'
+GREEN=$'\033[32m'
+YELLOW=$'\033[33m'
+BLUE=$'\033[34m'
+CYAN=$'\033[36m'
+
+##############################################################################
+# Logging
+##############################################################################
+
+log_info() {
+    printf "${BLUE}  ::${RST} %s\n" "$*"
+}
+
+log_ok() {
+    printf "${GREEN}  ✔${RST}  %s\n" "$*"
+}
+
+log_warn() {
+    printf "${YELLOW}  !!${RST} %s\n" "$*"
+}
+
+log_error() {
+    printf "${RED}  ✘${RST}  %s\n" "$*" >&2
+}
+
+die() {
+    log_error "$*"
+    exit 1
+}
+
+##############################################################################
+# Util
+##############################################################################
+
+need_bin() {
+    command -v "$1" >/dev/null 2>&1 ||
+        die "comando '$1' não encontrado"
+}
+
+usage() {
+    cat <<USAGE_EOF
+
+${BOLD}${PROG}${RST} ${VERSION}
+
+Uso:
+
+    ${PROG} new      <repo>
+    ${PROG} create   [repo]
+    ${PROG} publish  [repo]
+    ${PROG} push
+    ${PROG} rm       <repo> [--force]
+    ${PROG} clone    [repo]
+    ${PROG} info     <repo>
+    ${PROG} exists   <repo>
+    ${PROG} list
+    ${PROG} url      [repo]
+
+Fluxo para projeto local:
+
+    mkdir exemplo
+    cd exemplo
+    git init
+    echo '# exemplo' > README.md
+    git add .
+    git commit -m 'first commit'
+    ${PROG} create
+    ${PROG} push
+
+Ou em uma etapa:
+
+    ${PROG} publish
+
+Exemplos:
+
+    ${PROG} new kurumin
+    ${PROG} clone kurumin
+    ${PROG} clone              # escolhe com fzf
+    ${PROG} create             # usa o nome do diretório atual
+    ${PROG} publish            # create + push
+    ${PROG} rm kurumin --force
+
+Variáveis:
+
+    GIT_SERVER_HOST=$SERVER
+    GIT_SERVER_PORT=$GIT_PORT
+    GIT_SERVER_HTTP_PORT=$HTTP_PORT
+    GIT_SERVER_API_BASE=$API_BASE
+    GIT_SERVER_DEBUG=0|1
+
+USAGE_EOF
+}
+
+normalize_repo() {
+    local repo="${1:-}"
+
+    [[ -n "$repo" ]] ||
+        die "nome do repositório não informado"
+
+    repo="${repo%.git}"
+    repo="${repo#/}"
+
+    [[ "$repo" != *..* ]] ||
+        die "nome inválido: '$repo'"
+
+    [[ "$repo" != */* ]] ||
+        die "não utilize '/' no nome do repositório: '$repo'"
+
+    [[ "$repo" =~ ^[A-Za-z0-9._-]+$ ]] ||
+        die "caracteres inválidos no nome do repositório: '$repo'"
+
+    printf "%s.git\n" "$repo"
+}
+
+current_repo_name() {
+    local name
+
+    name="$(basename "$PWD")"
+    normalize_repo "$name"
+}
+
+repo_url() {
+    printf "git://%s:%s/%s\n" \
+        "$SERVER" \
+        "$GIT_PORT" \
+        "$1"
+}
+
+api_get() {
+    local endpoint="$1"
+    local repo="${2:-}"
+    local url="${API_BASE}/${endpoint}"
+
+    if [[ -n "$repo" ]]; then
+        url="${url}?repo=${repo}"
+    fi
+
+    curl -fsSL "$url"
+}
+
+repo_exists() {
+    local repo="$1"
+    local out
+
+    out="$(api_get exists "$repo" 2>/dev/null || true)"
+    [[ "$out" == "yes" ]]
+}
+
+confirm() {
+    local prompt="${1:-Continuar?}"
+    local ans
+
+    read -rp "$prompt [s/N] " ans
+
+    [[ "$ans" =~ ^[sSyY]$ ]]
+}
+
+inside_git_worktree() {
+    git rev-parse --is-inside-work-tree >/dev/null 2>&1
+}
+
+current_branch() {
+    git symbolic-ref --quiet --short HEAD 2>/dev/null || true
+}
+
+ensure_git_repo() {
+    inside_git_worktree || die "este diretório não é um repositório Git"
+}
+
+ensure_origin() {
+    git remote get-url origin >/dev/null 2>&1
+}
+
+set_origin() {
+    local repo="$1"
+    local url
+
+    url="$(repo_url "$repo")"
+
+    if ensure_origin; then
+        git remote set-url origin "$url"
+        log_ok "origin atualizado: $url"
+    else
+        git remote add origin "$url"
+        log_ok "origin criado: $url"
+    fi
+}
+
+##############################################################################
+# Commands
+##############################################################################
+
+cmd_new() {
+    local repo
+
+    repo="$(normalize_repo "${1:-}")"
+
+    repo_exists "$repo" &&
+        die "repositório já existe: $repo"
+
+    log_info "criando $repo via API"
+    api_get create "$repo"
+
+    log_ok "repositório criado"
+    log_ok "branch padrão: main"
+
+    printf "\n"
+    printf "Clone:\n"
+    printf "    %s\n\n" "$(repo_url "$repo")"
+}
+
+cmd_create() {
+    local repo
+
+    if [[ $# -eq 0 ]]; then
+        repo="$(current_repo_name)"
+    else
+        repo="$(normalize_repo "${1:-}")"
+    fi
+
+    if repo_exists "$repo"; then
+        log_warn "repositório remoto já existe: $repo"
+    else
+        log_info "criando repositório remoto via API: $repo"
+        api_get create "$repo"
+        log_ok "repositório remoto criado: $repo"
+        log_ok "branch padrão remota: main"
+    fi
+
+    ensure_git_repo
+
+    local branch
+    branch="$(current_branch)"
+
+    if [[ -n "$branch" && "$branch" != "main" ]]; then
+        log_warn "branch local atual é '$branch', não 'main'"
+        log_warn "para renomear: git branch -M main"
+    fi
+
+    set_origin "$repo"
+    log_ok "pronto para enviar com: ${PROG} push"
+}
+
+cmd_push() {
+    ensure_git_repo
+    ensure_origin || die "origin não configurado. Rode: ${PROG} create"
+
+    local branch
+    branch="$(current_branch)"
+
+    [[ -n "$branch" ]] ||
+        die "HEAD destacado; não há branch atual para enviar"
+
+    log_info "enviando branch '$branch' para origin"
+    git push -u origin HEAD
+    log_ok "push concluído"
+}
+
+cmd_publish() {
+    if [[ $# -eq 0 ]]; then
+        cmd_create
+    else
+        cmd_create "$1"
+    fi
+
+    cmd_push
+}
+
+cmd_rm() {
+    local repo
+    local force="${2:-}"
+
+    [[ $# -le 2 ]] || die "argumentos demais para rm"
+
+    repo="$(normalize_repo "${1:-}")"
+
+    repo_exists "$repo" ||
+        die "repositório não encontrado: $repo"
+
+    if [[ "$force" != "--force" && "$force" != "-f" ]]; then
+        confirm "Remover '$repo' permanentemente?" || {
+            log_warn "cancelado"
+            exit 0
+        }
+    fi
+
+    log_info "removendo $repo via API"
+    api_get delete "$repo"
+
+    log_ok "$repo removido"
+}
+
+cmd_clone() {
+    local repo
+
+    if [[ $# -eq 0 ]]; then
+        need_bin fzf
+
+        repo="$(
+            cmd_list | fzf \
+                --prompt='repo> ' \
+                --height=40% \
+                --reverse
+        )"
+
+        [[ -n "$repo" ]] || {
+            log_warn "nenhum repositório selecionado"
+            exit 1
+        }
+    else
+        repo="$(normalize_repo "${1:-}")"
+    fi
+
+    log_info "git clone $(repo_url "$repo")"
+    git clone "$(repo_url "$repo")"
+}
+
+cmd_fzf_clone() {
+    cmd_clone
+}
+
+cmd_info() {
+    local repo
+
+    repo="$(normalize_repo "${1:-}")"
+
+    repo_exists "$repo" ||
+        die "repositório não encontrado: $repo"
+
+    api_get info "$repo"
+}
+
+cmd_exists() {
+    local repo
+
+    repo="$(normalize_repo "${1:-}")"
+
+    if repo_exists "$repo"; then
+        log_ok "$repo existe"
+    else
+        log_warn "$repo não existe"
+        exit 1
+    fi
+}
+
+cmd_list() {
+    api_get list
+}
+
+cmd_url() {
+    local repo
+
+    if [[ $# -eq 0 ]]; then
+        repo="$(current_repo_name)"
+    else
+        repo="$(normalize_repo "${1:-}")"
+    fi
+
+    repo_url "$repo"
+}
+
+##############################################################################
+# Main
+##############################################################################
+
+main() {
+    need_bin curl
+    need_bin git
+
+    local cmd="${1:-}"
+
+    shift || true
+
+    case "$cmd" in
+        new)
+            cmd_new "$@"
+            ;;
+
+        create)
+            cmd_create "$@"
+            ;;
+
+        push)
+            cmd_push "$@"
+            ;;
+
+        publish)
+            cmd_publish "$@"
+            ;;
+
+        rm | remove | delete)
+            cmd_rm "$@"
+            ;;
+
+        clone)
+            cmd_clone "$@"
+            ;;
+
+        fzf-clone | pick | pick-clone)
+            cmd_fzf_clone
+            ;;
+
+        info)
+            cmd_info "$@"
+            ;;
+
+        exists)
+            cmd_exists "$@"
+            ;;
+
+        list | ls)
+            cmd_list
+            ;;
+
+        url)
+            cmd_url "$@"
+            ;;
+
+        "" | -h | --help | help)
+            usage
+            ;;
+
+        *)
+            die "comando desconhecido: $cmd"
+            ;;
+    esac
+}
+
+main "$@"
