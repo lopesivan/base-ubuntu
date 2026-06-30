@@ -1,73 +1,101 @@
-**Vantagens dessa abordagem**
+# git-server
 
-Partir de `ubuntu:22.04` com instalação mínima e s6-overlay
-como init system tem algumas vantagens reais:
+Gitea + OpenSSH sobre o baseimage Ubuntu + s6-overlay + su-exec.
 
-*Superfície de ataque reduzida.* Menos pacotes = menos
-CVEs. Uma imagem Ubuntu completa tem centenas de pacotes que
-nunca são usados num container. Aqui tens só o essencial.
+## Estrutura
 
-*Init system correto.* O s6-overlay resolve um problema real
-do Docker: processos zumbi e sinais não propagados. Sem ele,
-se teu processo principal faz `fork`, os filhos ficam órfãos
-e o container não encerra limpo. O s6 faz reaping de zumbis
-e propaga SIGTERM corretamente.
-
-*Troca de usuário segura.* O `su-exec` (equivalente ao
-`gosu`) troca de root para o usuário da aplicação sem
-criar um processo intermediário — diferente do `sudo`
-que mantém o processo pai rodando.
-
-*Base reproduzível.* Qualquer imagem derivada desta herda
-o mesmo padrão de init, criação de usuário e estrutura
-de diretórios.
-
----
-
-**O que roda bem nessa base**
-
-Qualquer serviço que seja um único processo ou um conjunto
-pequeno de processos supervisionados:
-
-- Servidores web (nginx, caddy)
-- Aplicações Python, Node, Go, Java
-- Ferramentas de CLI e automação
-- Agentes e workers de fila
-- Compiladores e ambientes de build (como o teu SDK)
-- Serviços de banco de dados leves
-
----
-
-**O que foi removido e o que isso implica**
-
-Não tens `systemd`, `cron` nativo, `syslog`, nem a maioria
-das ferramentas de sistema. Se precisares de:
-
-- **Tarefas agendadas** → usa `s6-cron` ou um processo dedicado com `sleep` loop
-- **Logs centralizados** → redireciona stdout/stderr para o Docker log driver
-- **Múltiplos serviços** → registra cada um em
-`custom-services.d` que o `99-custom-scripts` já processa
-
----
-
-**Como adicionar um serviço à base**
-
-Crias uma imagem filha:
-
-```dockerfile
-FROM ivancarlos/xpto-server:amd64-1.2.5
-
-RUN apt-get update && apt-get install -y nginx && rm -rf /var/lib/apt/lists/*
-
-COPY services/nginx /config/custom-services.d/nginx
+```
+git-server/
+├── Dockerfile
+├── Makefile
+├── .version
+├── home/                          ← volume: repos e home do usuário
+├── data/gitea/                    ← volume: banco SQLite + dados do Gitea
+├── config/gitea/                  ← volume: app.ini (gerado no primeiro boot)
+└── system/
+    ├── entrypoint.sh
+    ├── su-exec/su-exec
+    ├── root/
+    │   ├── usr/bin/with-contenv
+    │   └── etc/
+    │       ├── cont-init.d/
+    │       │   ├── 01-envfile          (secrets FILE__VAR)
+    │       │   ├── 10-adduser          (cria usuário com PUID/PGID)
+    │       │   ├── 20-sshd             (gera chaves host + sshd_config)
+    │       │   ├── 30-gitea            (cria app.ini + dirs)
+    │       │   ├── 90-custom-folders
+    │       │   └── 99-custom-scripts
+    │       └── services.d/
+    │           ├── sshd/run            (s6: sshd -D)
+    │           └── gitea/run           (s6: gitea web como USER)
 ```
 
-Onde `nginx` é um script `run` simples:
+## Primeiro uso
 
 ```bash
-#!/bin/bash
-exec nginx -g "daemon off;"
+# 1. Copie su-exec e os scripts do baseimage para system/
+#    (mesmos arquivos do xpto-server)
+
+# 2. Build
+make build
+
+# 3. Cria os volumes locais e sobe
+make up
 ```
 
-O s6 supervisiona, reinicia se cair, e o container encerra
-limpo quando necessário.
+Acesse o Gitea em: http://localhost:3000
+(Na primeira visita ele mostra o wizard de instalação — clique em "Install".)
+
+## Portas
+
+| Porta local | Serviço       |
+|-------------|---------------|
+| 3000        | Gitea HTTP    |
+| 2222        | SSH (git)     |
+
+SSH exposto na 2222 para não colidir com o SSH da máquina host.
+
+## Configurar chave SSH para push
+
+```bash
+# Na máquina host — adicione no ~/.ssh/config:
+Host gitea-local
+    HostName localhost
+    Port 2222
+    User SEU_USUARIO_GITEA
+    IdentityFile ~/.ssh/id_ed25519
+
+# Clone via SSH:
+git clone ssh://gitea-local/usuario/repo.git
+
+# ou com a URL curta após configurar o Host:
+git clone gitea-local:usuario/repo.git
+```
+
+## Variáveis de ambiente
+
+| Variável | Padrão | Descrição                        |
+|----------|--------|----------------------------------|
+| USER     | —      | Nome do usuário Linux no container |
+| GROUP    | —      | Nome do grupo                    |
+| PUID     | 1000   | UID                              |
+| PGID     | 1000   | GID                              |
+
+## Volumes
+
+| Volume local      | Dentro do container | Conteúdo                  |
+|-------------------|---------------------|---------------------------|
+| ./home            | /home/$USER         | Home + repos git          |
+| ./data/gitea      | /var/lib/gitea      | SQLite + uploads + sessões|
+| ./config/gitea    | /etc/gitea          | app.ini                   |
+
+## Comandos úteis
+
+```bash
+make log          # logs em tempo real
+make exec         # shell como USER
+make exec-root    # shell como root
+make exec-git     # shell como usuário git
+make restart      # reinicia o container
+make clean        # stop + rm
+```
