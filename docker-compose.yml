@@ -6,7 +6,6 @@ services:
     container_name: ${CONTAINER_NAME}
     hostname: ${HOSTNAME}
     working_dir: /home/${USER}
-    # command: entrypoint.sh /opt/sdk/bin/sdk.sh
     ports: [8989:443]
     volumes:
       - ./system/opt/xpto-server:/opt/xpto-server
