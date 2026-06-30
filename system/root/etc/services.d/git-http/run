@@ -3,4 +3,4 @@ set -Eeuo pipefail
 
 cd /opt/git-server
 
-exec ./git-http.sh
+exec as-user bash /opt/git-server/git-http.sh
