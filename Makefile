@@ -1,15 +1,5 @@
 include .version
 
-# Dado um número de versão MAJOR.MINOR.PATCH, incremente a:
-
-# 1. versão Maior(MAJOR): quando fizer mudanças incompatíveis na API,
-# 2. versão Menor(MINOR): quando adicionar funcionalidades mantendo
-#    compatibilidade, e
-# 3. versão de Correção(PATCH): quando corrigir falhas mantendo compatibilidade.
-#    Rótulos adicionais para pré-lançamento(pre-release) e metadados de
-#    construção(build) estão disponíveis como extensão ao formato
-#    MAJOR.MINOR.PATCH.
-
 NAME              = xpto-server
 USER              = $(shell id -u -n)
 GROUP             = $(shell id -g -n)
@@ -23,7 +13,6 @@ SERVICE           = ${NAME}
 OWNER             = ${GITHUB_USER}
 MACHINENAME       = $(OWNER)/$(NAME)
 
-DOCKER_COMPOSE    = docker-compose --env-file ${env-file}
 DOCKER            = docker
 CONTAINER_NAME    = $(NAME)
 EMAIL             = $(shell git config user.email)
@@ -44,25 +33,24 @@ VERSION_TAG       = ${LATEST}
 ##############################################################################
 
 VOLUMES = -v `pwd`/system/root/etc/cont-init.d:/etc/cont-init.d \
-		  -v `pwd`/system/opt/sdk:/opt/sdk \
+          -v `pwd`/system/opt/sdk:/opt/sdk \
           -v `pwd`/system/var/sdk:/var/sdk \
           -v `pwd`/system/etc/sdk:/etc/sdk
 
 BUILD_LABEL       = \
-	--label "org.opencontainers.image.created=${GITHUB_DATE}" \
-	--label "org.opencontainers.image.authors=${SITE}" \
-	--label "org.opencontainers.image.url=https://github.com/${GITHUB_USER}/docker-baseimage-ubuntu/packages" \
-	--label "org.opencontainers.image.documentation=https://docs.${SITE}/images/docker-baseimage-ubuntu" \
-	--label "org.opencontainers.image.source=https://github.com/${GITHUB_USER}/docker-baseimage-ubuntu" \
-	--label "org.opencontainers.image.version=${EXT_RELEASE_CLEAN}-ls${LS_TAG_NUMBER}" \
-	--label "org.opencontainers.image.revision=${COMMIT_SHA}" \
-	--label "org.opencontainers.image.vendor=${SITE}" \
-	--label "org.opencontainers.image.licenses=GPL-3.0-only" \
-	--label "org.opencontainers.image.ref.name=${COMMIT_SHA}" \
-	--label "org.opencontainers.image.title=Baseimage-ubuntu" \
-	--label "org.opencontainers.image.description=baseimage-ubuntu image by $(shell git config user.name)"
+    --label "org.opencontainers.image.created=${GITHUB_DATE}" \
+    --label "org.opencontainers.image.authors=${SITE}" \
+    --label "org.opencontainers.image.url=https://github.com/${GITHUB_USER}/docker-baseimage-ubuntu/packages" \
+    --label "org.opencontainers.image.documentation=https://docs.${SITE}/images/docker-baseimage-ubuntu" \
+    --label "org.opencontainers.image.source=https://github.com/${GITHUB_USER}/docker-baseimage-ubuntu" \
+    --label "org.opencontainers.image.version=${EXT_RELEASE_CLEAN}-ls${LS_TAG_NUMBER}" \
+    --label "org.opencontainers.image.revision=${COMMIT_SHA}" \
+    --label "org.opencontainers.image.vendor=${SITE}" \
+    --label "org.opencontainers.image.licenses=GPL-3.0-only" \
+    --label "org.opencontainers.image.ref.name=${COMMIT_SHA}" \
+    --label "org.opencontainers.image.title=Baseimage-ubuntu" \
+    --label "org.opencontainers.image.description=baseimage-ubuntu image by $(shell git config user.name)"
 
-#BUILD_OPTS = $(BUILD_LABEL) --no-cache --pull -t ${IMAGE}:${META_TAG} --build-arg VERSION="${VERSION_TAG}" --build-arg BUILD_DATE=${GITHUB_DATE}
 BUILD_OPTS = $(BUILD_LABEL) -t ${IMAGE}:${META_TAG} --build-arg VERSION="${VERSION_TAG}" --build-arg BUILD_DATE=${GITHUB_DATE}
 
 all: status
@@ -70,8 +58,8 @@ all: status
 init:
 	sudo chown ${USER}:${USER} -R system/
 
+# ── sem docker-compose, só gera o env-file ────────────────────────────────
 config:
-	# Configure envireoment file ${env-file}
 	@echo META_TAG=$(META_TAG)             > ${env-file}
 	@echo IMAGE=$(IMAGE)                   >> ${env-file}
 	@echo CONTAINER_NAME=$(CONTAINER_NAME) >> ${env-file}
@@ -81,25 +69,55 @@ config:
 	@echo GROUP=${GROUP}                   >> ${env-file}
 	@echo UID=${UID}                       >> ${env-file}
 	@echo GID=${GID}                       >> ${env-file}
-	$(DOCKER_COMPOSE) config
 
+# ── sobe em background (substitui docker-compose up) ─────────────────────
 up: config
-	$(DOCKER_COMPOSE) up -d ${SERVICE}
+	$(DOCKER) run -d \
+		--name $(CONTAINER_NAME) \
+		--hostname $(NAME) \
+		-p 8989:443 \
+		-e USER=$(USER) \
+		-e GROUP=$(GROUP) \
+		-e UID=$(UID) \
+		-e GID=$(GID) \
+		-e PUID=$(UID) \
+		-e PGID=$(GID) \
+		-v `pwd`/home:/home/$(USER) \
+		$(VOLUMES) \
+		-w /home/$(USER) \
+		$(IMAGE):$(META_TAG)
 
-run: config
-	# create user ${USER}
-	$(DOCKER_COMPOSE) run --rm \
-		--name ${NAME} \
+# ── interativo, efêmero, com usuário correto ─────────────────────────────
+run:
+	$(DOCKER) run -it --rm \
+		--name $(CONTAINER_NAME) \
+		--hostname $(NAME) \
+		-p 8989:443 \
 		-e USER=$$(id -u -n) \
 		-e GROUP=$$(id -g -n) \
 		-e UID=$$(id -u) \
 		-e GID=$$(id -g) \
-		${VOLUMES} \
-		-w/home/$$(id -u -n) \
-		${SERVICE}
+		-e PUID=$$(id -u) \
+		-e PGID=$$(id -g) \
+		-v `pwd`/home:/home/$$(id -u -n) \
+		$(VOLUMES) \
+		-w /home/$$(id -u -n) \
+		$(IMAGE):$(META_TAG)
 
+# ── interativo, efêmero, como root ───────────────────────────────────────
+run-as-root:
+	$(DOCKER) run -it --rm \
+		--name $(CONTAINER_NAME)-root \
+		--hostname $(NAME) \
+		-u root \
+		-v `pwd`:/host \
+		$(VOLUMES) \
+		-w /host \
+		$(IMAGE):$(META_TAG)
+
+# ── exec em container rodando ────────────────────────────────────────────
 exec:
-	$(DOCKER_COMPOSE) exec $(CONTAINER_NAME) entrypoint.sh /bin/bash -l
+	$(DOCKER) exec -it $(CONTAINER_NAME) entrypoint.sh /bin/bash -l
 
 exec-root:
 	$(DOCKER) exec -it -u root $(CONTAINER_NAME) bash
@@ -191,7 +209,7 @@ rm-dirs:
 	sudo rm -rf opt
 
 restart:
-	$(DOCKER) restart  $(CONTAINER_NAME)
+	$(DOCKER) restart $(CONTAINER_NAME)
 
 reset: rm-dirs create-dirs
 clean: stop rm
