@@ -1,35 +1,40 @@
 
 
-
 test:
 	curl http://localhost:8989/
 
+REPO ?= teste.git
 
-clone:
-	git clone git://localhost:9418/teste.git
-
-repo:
-	mkdir -p repos
-	git init --bare repos/teste.git
-	touch repos/teste.git/git-daemon-export-ok
-	git --git-dir=repos/teste.git config daemon.receivepack true
+git-clone:
+	git clone git://localhost:9418/$(REPO)
 
 git-info:
 	$(DOCKER) exec -it $(CONTAINER_NAME) ls -l /srv/git
-	$(DOCKER) exec -it $(CONTAINER_NAME) ls -l /srv/git/teste.git
-	$(DOCKER) exec -it $(CONTAINER_NAME) ls -l /srv/git/teste.git/git-daemon-export-ok
+	$(DOCKER) exec -it $(CONTAINER_NAME) ls -l /srv/git/$(REPO)
+	$(DOCKER) exec -it $(CONTAINER_NAME) ls -l /srv/git/$(REPO)/git-daemon-export-ok
+
+git-test:
+	mkdir -p repos
+	git init --bare repos/$(REPO)
+	touch repos/teste.git/git-daemon-export-ok
+	git --git-dir=repos/$(REPO) config daemon.receivepack true
 
 git-list:
-	$(DOCKER) exec -it $(CONTAINER_NAME) bash -lc '
-	echo "--- /srv/git ---"
-	ls -la /srv/git
-
-	echo "--- teste.git ---"
-	ls -la /srv/git/teste.git || true
-
-	echo "--- config ---"
-	cat /srv/git/teste.git/config || true
-
-	echo "--- daemon marker ---"
-	ls -la /srv/git/teste.git/git-daemon-export-ok || true
-	'
+	@$(DOCKER) exec -it $(CONTAINER_NAME) bash -lc '\
+		REPO="$(REPO)"; \
+		echo "=== $$REPO ==="; \
+		echo; \
+		echo "[/srv/git]"; \
+		ls -la /srv/git; \
+		echo; \
+		echo "[repositorio]"; \
+		ls -la "/srv/git/$$REPO" || true; \
+		echo; \
+		echo "[config]"; \
+		cat "/srv/git/$$REPO/config" || true; \
+		echo; \
+		echo "[git config]"; \
+		git --git-dir="/srv/git/$$REPO" config --list || true; \
+		echo; \
+		echo "[export]"; \
+		ls -l "/srv/git/$$REPO/git-daemon-export-ok" || true'
