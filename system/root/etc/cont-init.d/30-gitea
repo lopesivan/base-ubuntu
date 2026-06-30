@@ -1,0 +1,94 @@
+#!/usr/bin/with-contenv bash
+# cont-init.d/30-gitea — prepara config e diretórios do Gitea
+set -euo pipefail
+
+log() { echo "[gitea-init] $*"; }
+
+_USER="${USER:-git}"
+_GROUP="${GROUP:-git}"
+_UID="${PUID:-1000}"
+_GID="${PGID:-1000}"
+
+GITEA_HOME="/home/${_USER}"
+REPOS_DIR="${GITEA_HOME}/repos"
+APP_INI="/etc/gitea/app.ini"
+WORK_DIR="/var/lib/gitea"
+
+# --- Diretórios de dados ----------------------------------------------------
+for dir in "${WORK_DIR}/data" "${WORK_DIR}/log" "${WORK_DIR}/custom" \
+           "${REPOS_DIR}" "${GITEA_HOME}/.ssh"; do
+    if [[ ! -d "$dir" ]]; then
+        mkdir -p "$dir"
+        log "criado $dir"
+    fi
+done
+
+chown -R "${_UID}:${_GID}" "${WORK_DIR}" "${GITEA_HOME}"
+chmod 700 "${GITEA_HOME}/.ssh"
+
+# --- app.ini (só escreve se não existir — preserva config manual) -----------
+if [[ -f "$APP_INI" ]]; then
+    log "app.ini já existe, mantendo"
+else
+    log "Gerando app.ini"
+
+    # Chave interna do Gitea (64 bytes hex aleatórios)
+    SECRET_KEY=$(head -c 32 /dev/urandom | xxd -p -c 64)
+    INTERNAL_TOKEN=$(head -c 32 /dev/urandom | xxd -p -c 64)
+
+    cat > "$APP_INI" <<EOF
+APP_NAME = Git Server
+RUN_USER = ${_USER}
+RUN_MODE = prod
+WORK_PATH = ${WORK_DIR}
+
+[server]
+DOMAIN           = localhost
+HTTP_PORT        = 3000
+ROOT_URL         = http://localhost:3000/
+SSH_DOMAIN       = localhost
+SSH_PORT         = 22
+START_SSH_SERVER = false
+DISABLE_SSH      = false
+OFFLINE_MODE     = true
+
+[database]
+DB_TYPE  = sqlite3
+PATH     = ${WORK_DIR}/data/gitea.db
+
+[repository]
+ROOT = ${REPOS_DIR}
+
+[security]
+INSTALL_LOCK   = false
+SECRET_KEY     = ${SECRET_KEY}
+INTERNAL_TOKEN = ${INTERNAL_TOKEN}
+
+[service]
+DISABLE_REGISTRATION              = false
+REQUIRE_SIGNIN_VIEW               = false
+REGISTER_EMAIL_CONFIRM            = false
+ENABLE_NOTIFY_MAIL                = false
+ALLOW_ONLY_EXTERNAL_SELF_REGISTER = false
+NO_REPLY_ADDRESS                  = noreply@localhost
+
+[mailer]
+ENABLED = false
+
+[log]
+ROOT_PATH = ${WORK_DIR}/log
+MODE      = console
+LEVEL     = info
+
+[session]
+PROVIDER = file
+
+[picture]
+DISABLE_GRAVATAR        = true
+ENABLE_FEDERATED_AVATAR = false
+EOF
+
+    chown "${_UID}:${_GID}" "$APP_INI"
+    chmod 640 "$APP_INI"
+    log "app.ini gerado em $APP_INI"
+fi
