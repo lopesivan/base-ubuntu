@@ -1,245 +1,199 @@
-Sim, e isso é uma das partes mais legais do `s6-overlay`: **eles foram usados**, mesmo que você não tenha percebido.
+git-server
+==========
 
-Veja a ordem que apareceu no log:
+Esse é exatamente um dos pontos fortes do `s6`: **cada
+servidor vira um serviço independente**.
 
-```text
-fix-attrs
-legacy-cont-init
-legacy-services
-```
-
-O `legacy-cont-init` executa **todos os scripts em**:
+Hoje você tem:
 
 ```text
-/etc/cont-init.d/
+services.d/
+└── xpto-server/
+    └── run
 ```
 
-na ordem lexicográfica:
+Se amanhã quiser um servidor Git, basta adicionar outro serviço:
 
 ```text
-01-envfile
-10-adduser
-90-custom-folders
-99-custom-scripts
-```
-
-Só depois o `legacy-services` inicia:
-
-```text
-/etc/services.d/xpto-server/run
-```
-
-Ou seja, a sequência é exatamente esta:
-
-```
-+----------------------+
-| /init                |
-+----------+-----------+
-           |
-           v
-+----------------------+
-| 01-envfile           |
-+----------+-----------+
-           |
-           v
-+----------------------+
-| 10-adduser           |
-+----------+-----------+
-           |
-           v
-+----------------------+
-| 90-custom-folders    |
-+----------+-----------+
-           |
-           v
-+----------------------+
-| 99-custom-scripts    |
-+----------+-----------+
-           |
-           v
-+----------------------+
-| xpto-server/run      |
-+----------+-----------+
-           |
-           v
-+----------------------+
-| server.py            |
-+----------------------+
-```
-
-Então eles **não ficaram inúteis**.
-
----
-
-## O papel de cada um
-
-### 01-envfile
-
-Converte
-
-```
-FILE__PASSWORD=/run/secrets/password
-```
-
-em
-
-```
-PASSWORD=minha_senha
-```
-
-É muito útil quando usar Docker Secrets.
-
----
-
-### 10-adduser
-
-Cria o usuário
-
-```
-ivan
-```
-
-com
-
-```
-UID
-GID
-```
-
-passados pelo compose.
-
-Assim o servidor pode rodar como usuário comum.
-
----
-
-### 90-custom-folders
-
-Prepara diretórios da aplicação.
-
-Hoje você cria
-
-```
-/config
-/defaults
-/app
-```
-
-Amanhã pode criar
-
-```
-/var/xpto
-
-/run/xpto
-
-/cache/xpto
-```
-
----
-
-### 99-custom-scripts
-
-É o mais interessante.
-
-Ele permite que qualquer pessoa coloque um script em
-
-```
-/config/custom-cont-init.d/
-```
-
-sem reconstruir a imagem.
-
-Exemplo:
-
-```
-config/
-└── custom-cont-init.d
-    ├── 10-download-model
-    ├── 20-create-db
-    ├── 30-generate-config
-```
-
-Seu container executará tudo automaticamente.
-
----
-
-## O que eu mudaria
-
-Na verdade eu faria apenas uma mudança.
-
-Hoje você ainda tem:
-
-```
-entrypoint.sh
-```
-
-Mas agora quem controla tudo é o
-
-```
-/init
-```
-
-Então eu removeria completamente o `entrypoint.sh`.
-
-Ficaria:
-
-```
 system/
+├── opt/
+│   ├── xpto-server/
+│   │   └── server.py
+│   └── git-server/
+│       ├── git-http.sh
+│       └── git-daemon.sh
+│
+└── root/
+    └── etc/
+        └── services.d/
+            ├── xpto-server/
+            │   └── run
+            │
+            ├── git-http/
+            │   └── run
+            │
+            └── git-daemon/
+                └── run
+```
 
-root/
-    etc/
-        cont-init.d/
-        services.d/
+O `run` do Git seria algo como:
+
+```bash
+#!/usr/bin/with-contenv bash
+exec git daemon \
+    --reuseaddr \
+    --verbose \
+    --export-all \
+    --base-path=/srv/git \
+    /srv/git
+```
+
+Enquanto o servidor HTTP continua independente.
+
+O interessante é que o `s6` fica assim:
+
+```
+           /init
+              │
+    ┌─────────┴──────────┐
+    │                    │
+cont-init.d         services.d
+                         │
+        ┌────────────────┼───────────────┐
+        │                │               │
+ xpto-server        git-http        git-daemon
+```
+
+Se o `git-daemon` morrer, apenas ele será reiniciado.
+
+O servidor HTTP continua funcionando.
+
+---
+
+## Se quiser adicionar N serviços
+
+A estrutura continua crescendo naturalmente.
+
+```text
+services.d/
+├── nginx/
+├── ssh/
+├── xpto-server/
+├── git-http/
+├── git-daemon/
+├── cron/
+├── redis/
+└── worker/
+```
+
+Cada um possui seu próprio:
+
+```text
+run
+finish
+```
+
+(opcionalmente `notification-fd`, `data`, etc.).
+
+---
+
+## Eu iria um passo além
+
+Como você está construindo uma base reutilizável, eu separaria **aplicações** de **serviços**.
+
+```text
+system/
 
 opt/
     xpto-server/
+    git-server/
+    nginx/
+    ssh/
 
-Dockerfile
+root/
+
+    etc/
+
+        cont-init.d/
+
+        services.d/
+
+            xpto-server/
+                run
+
+            git-daemon/
+                run
+
+            nginx/
+                run
+
+            ssh/
+                run
 ```
 
-O `10-adduser` já faz exatamente o trabalho que o `entrypoint.sh` fazia.
+Repare que:
 
-Você está criando o usuário duas vezes:
+* `/opt` contém **os programas**;
+* `/etc/services.d` contém **como executá-los**.
 
-```
-entrypoint.sh
+Assim um mesmo programa pode ter mais de um serviço.
+
+Por exemplo:
+
+```text
+opt/git-server/
+    git-http-backend
+    git-daemon
 ```
 
 e
 
-```
-10-adduser
+```text
+services.d/
+
+git-http/
+    run
+
+git-daemon/
+    run
 ```
 
-Isso é redundante.
+São dois serviços diferentes usando os mesmos binários.
 
 ---
 
-## Minha sugestão
+## Eu também criaria um diretório `services`
 
-Eu reorganizaria assim:
+Outra ideia que acho elegante é desacoplar completamente a lógica do serviço.
 
-```
+```text
 system/
 
-opt/
+services/
+
+    git-daemon/
+        run
+
+    nginx/
+        run
+
     xpto-server/
-        server.py
-
-root/
-    etc/
-        cont-init.d/
-            01-envfile
-            10-adduser
-            20-config
-            30-directories
-            40-permissions
-
-        services.d/
-            xpto-server/
-                run
+        run
 ```
 
-Observe que eu substituiria a numeração `90` e `99` por `20`, `30` e `40`. Como são scripts da própria imagem, faz sentido executá-los cedo, antes de qualquer script personalizado que o usuário possa adicionar no futuro.
+No `Dockerfile`:
 
-No geral, sua estrutura está muito próxima do padrão usado por imagens maduras baseadas em `s6-overlay` (como as da LinuxServer.io). A única simplificação que eu faria é eliminar o `entrypoint.sh` e deixar que todo o ciclo de inicialização seja controlado exclusivamente pelo `s6` através dos scripts em `cont-init.d` e dos serviços em `services.d`.
+```dockerfile
+COPY system/services/ /etc/services.d/
+```
+
+Assim a estrutura fica muito clara:
+
+```
+opt/        -> aplicações
+etc/        -> configuração
+services/   -> supervisão do s6
+```
+
+Na minha opinião, essa organização escala muito bem. Você pode começar com um único servidor HTTP e, no futuro, adicionar Git, Nginx, SSH, Redis ou qualquer outro serviço sem alterar a arquitetura: basta criar um novo diretório em `services.d` com o respectivo `run`. É exatamente esse o modelo que o `s6-overlay` foi projetado para suportar.
 
