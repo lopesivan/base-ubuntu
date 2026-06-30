@@ -66,11 +66,11 @@ COPY system/opt/xpto-server/          /opt/xpto-server/
 COPY system/root/etc/services.d/      /etc/services.d/
 
 RUN chmod +x \
-        /etc/s6-overlay/s6-rc.d/* \
-        /etc/services.d/*/run \
-        /usr/local/bin/entrypoint.sh \
-        /usr/local/bin/su-exec \
-        /usr/bin/with-contenv
+    /etc/s6-overlay/s6-rc.d/* \
+    /etc/services.d/xpto-server/run \
+    /usr/local/bin/entrypoint.sh \
+    /usr/local/bin/su-exec \
+    /usr/bin/with-contenv
 
 ENTRYPOINT ["/init"]
 
