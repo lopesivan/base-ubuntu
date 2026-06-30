@@ -1,0 +1,42 @@
+#!/usr/bin/with-contenv bash
+# cont-init.d/20-sshd
+set -euo pipefail
+
+log() { echo "[sshd-init] $*"; }
+
+_USER="${USER:-}"
+
+# --- Chaves do host ---------------------------------------------------------
+for type in rsa ecdsa ed25519; do
+    keyfile="/etc/ssh/ssh_host_${type}_key"
+    if [[ ! -f "$keyfile" ]]; then
+        log "Gerando chave host: $type"
+        ssh-keygen -t "$type" -N "" -f "$keyfile" >/dev/null
+    fi
+done
+
+# --- sshd_config ------------------------------------------------------------
+cat > /etc/ssh/sshd_config <<EOF
+Port 22
+AddressFamily any
+ListenAddress 0.0.0.0
+
+PermitRootLogin no
+PasswordAuthentication no
+ChallengeResponseAuthentication no
+UsePAM no
+
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+
+# Restringe ao usuário do host
+${_USER:+AllowUsers ${_USER}}
+
+AllowTcpForwarding no
+GatewayPorts no
+X11Forwarding no
+PrintMotd no
+AcceptEnv LANG LC_*
+EOF
+
+log "sshd_config pronto (AllowUsers=${_USER:-<qualquer>})"
