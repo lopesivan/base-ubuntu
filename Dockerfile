@@ -58,7 +58,7 @@ RUN set -eux && \
 COPY system/su-exec/su-exec /usr/local/bin/su-exec
 
 # scripts de sistema
-COPY system/entrypoint.sh             /usr/local/bin/entrypoint.sh
+COPY system/as-user                   /usr/local/bin/entrypoint.sh
 COPY system/root/usr/bin/with-contenv /usr/bin/with-contenv
 COPY system/root/etc/cont-init.d/     /etc/s6-overlay/s6-rc.d/
 
@@ -68,7 +68,7 @@ COPY system/root/etc/services.d/      /etc/services.d/
 RUN chmod +x \
     /etc/s6-overlay/s6-rc.d/* \
     /etc/services.d/xpto-server/run \
-    /usr/local/bin/entrypoint.sh \
+    /usr/local/bin/as-user \
     /usr/local/bin/su-exec \
     /usr/bin/with-contenv
 
