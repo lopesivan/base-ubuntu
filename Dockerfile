@@ -44,6 +44,7 @@ RUN set -eux && \
         tzdata      \
         xz-utils    \
         python3 \
+        git \
     && \
     locale-gen en_US.UTF-8 && \
     # instala s6-overlay v3
@@ -63,6 +64,8 @@ COPY system/root/usr/bin/with-contenv /usr/bin/with-contenv
 COPY system/root/etc/cont-init.d/     /etc/s6-overlay/s6-rc.d/
 
 COPY system/opt/xpto-server/          /opt/xpto-server/
+COPY system/opt/git-server/           /opt/git-server/
+
 COPY system/root/etc/services.d/      /etc/services.d/
 
 RUN chmod +x \
