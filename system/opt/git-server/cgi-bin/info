@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+echo "Content-Type: text/plain"
+echo
+
+repo="${QUERY_STRING#repo=}"
+repo="${repo%.git}.git"
+
+case "$repo" in
+    ""|".git"|*/*|*..*) echo "invalid repo"; exit 1 ;;
+esac
+
+path="/srv/git/$repo"
+
+if [ ! -d "$path" ]; then
+    echo "not found: $repo"
+    exit 1
+fi
+
+echo "name=$repo"
+echo "path=$path"
+echo "head=$(git --git-dir="$path" symbolic-ref --short HEAD 2>/dev/null || true)"
+echo "receivepack=$(git --git-dir="$path" config --bool daemon.receivepack || echo false)"
+echo "exported=$([ -f "$path/git-daemon-export-ok" ] && echo yes || echo no)"
+echo "size=$(du -sh "$path" | awk '{print $1}')"
+
