@@ -1,0 +1,12 @@
+#!/bin/bash
+# services.d/git-daemon/run
+# Serve /srv/git (→ /home/$USER/repos) de forma anônima, read-only.
+# Para habilitar um repo: toque o arquivo git-daemon-export-ok dentro dele.
+#   $ git init --bare repo.git
+#   $ touch repo.git/git-daemon-export-ok
+exec /usr/bin/git daemon \
+    --reuseaddr          \
+    --verbose            \
+    --export-all         \
+    --base-path=/srv/git \
+    /srv/git
