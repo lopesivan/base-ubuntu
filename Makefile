@@ -43,6 +43,32 @@ IMAGE             = ${MACHINENAME}
 META_TAG          = amd64-${VERSION}
 VERSION_TAG       = ${LATEST}
 
+###
+DOCKER            = docker
+CONTAINER_NAME    = $(NAME)
+IMAGE_FULL        = $(IMAGE):$(META_TAG)
+
+DOCKER_RUN_OPTS = \
+	--name $(CONTAINER_NAME) \
+	--hostname $(NAME) \
+	--workdir /home/$(USER) \
+	-p 8989:443 \
+	-p 8080:8080 \
+	-p 9418:9418 \
+	-v $(PWD)/system/opt/xpto-server:/opt/xpto-server \
+	-v $(PWD)/system/opt/git-server:/opt/git-server \
+	-v $(PWD)/system/root/etc/services.d:/etc/services.d \
+	-v $(PWD)/home:/home/$(USER) \
+	-v $(PWD)/repos:/srv/git \
+	-e PUID=$(UID) \
+	-e PGID=$(GID) \
+	-e USER=$(USER) \
+	-e GROUP=$(GROUP) \
+	-e UID=$(UID) \
+	-e GID=$(GID) \
+	-e PORT=443 \
+	-e MESSAGE="Servidor XPTO respondendo pelo s6"
+
 ##############################################################################
 
 VOLUMES = -v `pwd`/system/root/etc/cont-init.d:/etc/cont-init.d \
@@ -73,7 +99,6 @@ init:
 	sudo chown ${USER}:${USER} -R system/
 
 config:
-	# Configure envireoment file ${env-file}
 	@echo META_TAG=$(META_TAG)              > ${env-file}
 	@echo IMAGE=$(IMAGE)                   >> ${env-file}
 	@echo CONTAINER_NAME=$(CONTAINER_NAME) >> ${env-file}
@@ -83,18 +108,23 @@ config:
 	@echo GROUP=${GROUP}                   >> ${env-file}
 	@echo UID=${UID}                       >> ${env-file}
 	@echo GID=${GID}                       >> ${env-file}
-	$(DOCKER_COMPOSE) config
+	@cat ${env-file}
 
 build: su-exec
 	$(DOCKER) build $(BUILD_OPTS) .
 
-up: config
+chmods:
 	# xpto-server
 	chmod +x system/root/etc/services.d/xpto-server/run
 	# git-server
 	chmod +x system/root/etc/services.d/git-http/run
 	chmod +x system/root/etc/services.d/git-daemon/run
-	$(DOCKER_COMPOSE) up -d ${SERVICE}
+
+up: chmods run
+
+run: config
+	$(DOCKER) rm -f $(CONTAINER_NAME) 2>/dev/null || true
+	$(DOCKER) run -d $(DOCKER_RUN_OPTS) $(IMAGE_FULL)
 
 # down:
 # 	chmod -x system/root/etc/services.d/xpto-server/run
@@ -107,16 +137,5 @@ include exec.mk
 include git-server.mk
 include xpto-server.mk
 
-run: config
-	# create user ${USER}
-	$(DOCKER_COMPOSE) run --rm \
-		--name ${NAME} \
-		-e USER=$$(id -u -n) \
-		-e GROUP=$$(id -g -n) \
-		-e UID=$$(id -u) \
-		-e GID=$$(id -g) \
-		${VOLUMES} \
-		-w/home/$$(id -u -n) \
-		${SERVICE}
 
 # eof
