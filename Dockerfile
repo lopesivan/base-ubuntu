@@ -43,6 +43,7 @@ RUN set -eux && \
         locales     \
         tzdata      \
         xz-utils    \
+        python3 \
     && \
     locale-gen en_US.UTF-8 && \
     # instala s6-overlay v3
@@ -60,13 +61,15 @@ COPY system/su-exec/su-exec /usr/local/bin/su-exec
 COPY system/entrypoint.sh             /usr/local/bin/entrypoint.sh
 COPY system/root/usr/bin/with-contenv /usr/bin/with-contenv
 COPY system/root/etc/cont-init.d/     /etc/s6-overlay/s6-rc.d/
-COPY system/opt/sdk/                  /opt/sdk/
-COPY system/etc/sdk/                  /etc/sdk/
+
+COPY system/opt/xpto-server/          /opt/xpto-server/
+COPY system/root/etc/services.d/      /etc/services.d/
 
 RUN chmod +x \
         /etc/s6-overlay/s6-rc.d/* \
+        /etc/services.d/*/run \
         /usr/local/bin/entrypoint.sh \
-        /usr/local/bin/su-exec       \
+        /usr/local/bin/su-exec \
         /usr/bin/with-contenv
 
 ENTRYPOINT ["/init"]
