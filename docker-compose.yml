@@ -6,14 +6,12 @@ services:
     container_name: ${CONTAINER_NAME}
     hostname: ${HOSTNAME}
     working_dir: /home/${USER}
-    # command: entrypoint.sh /bin/bash -l
+    # command: entrypoint.sh /opt/sdk/bin/sdk.sh
     ports: [8989:443]
     volumes:
-      - ./system/root/etc/cont-init.d:/etc/cont-init.d
-      - ./system/opt/sdk:/opt/sdk
-      - ./system/var/sdk:/var/sdk
-      - ./system/etc/sdk:/etc/sdk
-      - ${PWD}/home:/home/${USER}
+      - ./system/opt/xpto-server:/opt/xpto-server
+      - ./system/root/etc/services.d:/etc/services.d
+      - ./home:/home/${USER}
     environment:
       - PUID=${UID}
       - PGID=${GID}
@@ -21,6 +19,8 @@ services:
       - GROUP=${GROUP}
       - UID=${UID}
       - GID=${GID}
+      - PORT=443
+      - MESSAGE=Servidor XPTO respondendo pelo s6
 
     # env_file: env.production
 
