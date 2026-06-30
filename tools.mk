@@ -61,7 +61,9 @@ stop:
 rm:
 	$(DOCKER) rm $(CONTAINER_NAME)
 
-clean: stop rm clean-su-exec
+clean: stop rm
+	chmod -x system/root/etc/services.d/xpto-server/run
+	chmod -x system/opt/xpto-server/server.py
 
 su-exec:
 	make -C system/su-exec
