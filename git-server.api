@@ -351,12 +351,13 @@ cmd_fzf_clone() {
 
 cmd_info() {
     local repo
-
-    repo="$(normalize_repo "${1:-}")"
-
+    if [[ $# -eq 0 ]]; then
+        repo="$(current_repo_name)"
+    else
+        repo="$(normalize_repo "${1:-}")"
+    fi
     repo_exists "$repo" ||
         die "repositório não encontrado: $repo"
-
     api_get info "$repo"
 }
 
