@@ -1,0 +1,45 @@
+#!/usr/bin/with-contenv bash
+# cont-init.d/30-git
+# Garante que o diretório de repos e o .ssh do usuário existam
+# com as permissões certas para SSH + git-daemon.
+set -euo pipefail
+
+log() { echo "[git-init] $*"; }
+
+_USER="${USER:-}"
+_GROUP="${GROUP:-}"
+_UID="${PUID:-}"
+_GID="${PGID:-}"
+
+if [[ -z "$_USER" || -z "$_UID" ]]; then
+    log "USER/PUID não definidos — nada a fazer"
+    exit 0
+fi
+
+HOME_DIR="/home/${_USER}"
+SSH_DIR="${HOME_DIR}/.ssh"
+REPOS_DIR="${HOME_DIR}/repos"   # repos ficam em /home/$USER/repos
+DAEMON_EXPORT="${HOME_DIR}/repos"  # git-daemon serve daqui também
+
+# --- .ssh -------------------------------------------------------------------
+mkdir -p "$SSH_DIR"
+chmod 700 "$SSH_DIR"
+touch "${SSH_DIR}/authorized_keys"
+chmod 600 "${SSH_DIR}/authorized_keys"
+chown -R "${_UID}:${_GID}" "$SSH_DIR"
+log ".ssh pronto"
+
+# --- repos ------------------------------------------------------------------
+mkdir -p "$REPOS_DIR"
+chown "${_UID}:${_GID}" "$REPOS_DIR"
+log "repos dir: $REPOS_DIR"
+
+# --- /srv/git → symlink para o volume montado --------------------------------
+# git-daemon aponta para /srv/git; symlink evita duplicar o volume
+if [[ ! -L /srv/git ]]; then
+    rm -rf /srv/git
+    ln -s "$REPOS_DIR" /srv/git
+    log "/srv/git → $REPOS_DIR"
+fi
+
+log "pronto"
