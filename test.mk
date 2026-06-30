@@ -19,7 +19,11 @@ git-test:
 	touch repos/teste.git/git-daemon-export-ok
 	git --git-dir=repos/$(REPO) config daemon.receivepack true
 
+
 git-list:
+	# USAGE:
+	#make git-list
+	#make git-list REPO=projeto.git
 	@$(DOCKER) exec -it $(CONTAINER_NAME) bash -lc '\
 		REPO="$(REPO)"; \
 		echo "=== $$REPO ==="; \
