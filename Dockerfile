@@ -58,7 +58,7 @@ RUN set -eux && \
 COPY system/su-exec/su-exec /usr/local/bin/su-exec
 
 # scripts de sistema
-COPY system/as-user                   /usr/local/bin/entrypoint.sh
+COPY system/as-user                   /usr/local/bin/as-user
 COPY system/root/usr/bin/with-contenv /usr/bin/with-contenv
 COPY system/root/etc/cont-init.d/     /etc/s6-overlay/s6-rc.d/
 
