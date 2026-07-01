@@ -352,13 +352,12 @@ cmd_publish() {
 }
 
 cmd_rm() {
-    local repo
+
+    repo="$(resolve_repo "$@")"
     local force="${2:-}"
 
-    [[ $# -ge 1 ]] || die "uso: ${PROG} rm <repo> [--force]"
-    [[ $# -le 2 ]] || die "argumentos demais para rm"
-
-    repo="$(normalize_repo "$1")"
+    #[[ $# -ge 1 ]] || die "uso: ${PROG} rm <$repo> [--force]"
+    #[[ $# -le 2 ]] || die "argumentos demais para rm"
 
     repo_exists "$repo" ||
         die "repositório não encontrado: $repo"
@@ -483,6 +482,54 @@ cmd_url() {
     repo_url "$repo"
 }
 
+cmd_import() {
+
+    ensure_git_repo
+
+    local repo
+
+    repo="$(resolve_repo "$@")"
+
+    log_info "criando repositório remoto: $repo"
+
+    if repo_exists "$repo"; then
+        log_warn "repositório já existe"
+    else
+        api_get create "$repo"
+    fi
+
+    set_origin "$repo"
+
+    log_info "buscando referências remotas"
+    git fetch --all
+
+    log_info "criando branches locais"
+
+    while read -r r; do
+
+        b="${r#origin/}"
+
+        git show-ref --verify --quiet "refs/heads/$b" ||
+            git branch --track "$b" "$r"
+
+    done < <(
+        git for-each-ref \
+            --format='%(refname:short)' \
+            refs/remotes/origin |
+            grep -v '^origin/HEAD$'
+    )
+
+    log_info "enviando branches"
+
+    git push origin --all
+
+    log_info "enviando tags"
+
+    git push origin --tags
+
+    log_ok "importação concluída"
+
+}
 ##############################################################################
 # Main
 ##############################################################################
@@ -515,6 +562,9 @@ main() {
             ;;
         fzf-clone | pick | pick-clone)
             cmd_fzf_clone
+            ;;
+        import)
+            cmd_import "$@"
             ;;
         info)
             cmd_info "$@"
